@@ -71,7 +71,7 @@ jobs:
         run: pnpm typecheck
         
       - name: Core Tests
-        run: pnpm run test --filter @claude-relay/core
+        run: pnpm --filter @claude-relay/core test
         
       - name: Build
         run: pnpm build

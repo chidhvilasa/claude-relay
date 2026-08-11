@@ -5,7 +5,8 @@ suite('Extension Test Suite', () => {
   vscode.window.showInformationMessage('Start all tests.');
 
   test('Extension should be present', () => {
-    assert.ok(vscode.extensions.getExtension('anthropic.claude-relay'));
+    const ext = vscode.extensions.getExtension('clauderelay-oss.claude-relay');
+    assert.ok(ext);
   });
 
   test('Commands should be registered', async () => {
