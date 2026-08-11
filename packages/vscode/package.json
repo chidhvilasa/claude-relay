@@ -1,0 +1,114 @@
+{
+  "name": "claude-relay",
+  "displayName": "Claude Relay",
+  "description": "Automatic session continuity for Claude Code.",
+  "version": "0.1.0",
+  "publisher": "clauderelay-oss",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeRelay.setup",
+        "title": "Claude Relay: Set Up"
+      },
+      {
+        "command": "claudeRelay.healthCheck",
+        "title": "Claude Relay: Health Check"
+      },
+      {
+        "command": "claudeRelay.checkpoint",
+        "title": "Claude Relay: Create Checkpoint"
+      },
+      {
+        "command": "claudeRelay.handoff",
+        "title": "Claude Relay: Create Handoff Now"
+      },
+      {
+        "command": "claudeRelay.resume",
+        "title": "Claude Relay: Resume Previous Task"
+      },
+      {
+        "command": "claudeRelay.openLatestHandoff",
+        "title": "Claude Relay: Open Latest Handoff"
+      },
+      {
+        "command": "claudeRelay.openDashboard",
+        "title": "Claude Relay: Open Dashboard"
+      },
+      {
+        "command": "claudeRelay.clearResolvedHandoff",
+        "title": "Claude Relay: Clear Resolved Handoff"
+      },
+      {
+        "command": "claudeRelay.reinstallClaudeIntegration",
+        "title": "Claude Relay: Reinstall Claude Integration"
+      },
+      {
+        "command": "claudeRelay.removeClaudeIntegration",
+        "title": "Claude Relay: Remove Claude Integration"
+      },
+      {
+        "command": "claudeRelay.showLogs",
+        "title": "Claude Relay: Show Logs"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claudeRelay",
+          "title": "Claude Relay",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "claudeRelay": [
+        {
+          "id": "claudeRelayDashboard",
+          "name": "Dashboard"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Claude Relay",
+      "properties": {
+        "claudeRelay.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Claude Relay"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run build",
+    "build": "esbuild src/extension.ts --bundle --external:vscode --format=cjs --platform=node --outfile=dist/extension.js && esbuild ../core/src/claude/hook-runner-standalone.ts --bundle --platform=node --outfile=dist/hook-runner.cjs",
+    "watch": "tsc -watch -p ./",
+    "pretest": "pnpm run build",
+    "test": "tsc -p ./ && node dist/test/runTest.js",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "@claude-relay/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^2.4.1",
+    "esbuild": "^0.28.2",
+    "glob": "^11.0.1",
+    "mocha": "^11.1.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
