@@ -22,28 +22,6 @@
         ]
       }
     ],
-    "PostCompact": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/runtime/hook-runner.cjs\" PostCompact"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/runtime/hook-runner.cjs\" Stop"
-          }
-        ]
-      }
-    ],
     "StopFailure": [
       {
         "matcher": "",
@@ -51,17 +29,6 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/runtime/hook-runner.cjs\" StopFailure"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/runtime/hook-runner.cjs\" SessionEnd"
           }
         ]
       }

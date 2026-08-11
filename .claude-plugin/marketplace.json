@@ -6,12 +6,18 @@
   },
   "metadata": {
     "description": "Official Claude Code plugins for Claude Relay",
-    "version": "0.2.0-dev"
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "claude-relay",
-      "source": "./plugins/claude-relay"
+      "source": "./plugins/claude-relay",
+      "version": "0.2.0",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/chidhvilasa/claude-relay.git",
+        "ref": "v0.2.0"
+      }
     }
   ]
 }

@@ -27,52 +27,94 @@ var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
 var crypto = __toESM(require("crypto"));
 var import_child_process = require("child_process");
+var MAX_STDIN_BYTES = 256 * 1024;
 async function main() {
-  const stdinBuffer = fs.readFileSync(0);
-  if (stdinBuffer.length === 0)
-    process.exit(0);
-  let eventPayload;
+  const stdinBuffer = Buffer.alloc(MAX_STDIN_BYTES);
+  let bytesRead = 0;
   try {
-    eventPayload = JSON.parse(stdinBuffer.toString("utf-8"));
+    while (true) {
+      const chunk = fs.readFileSync(0);
+      if (chunk.length === 0)
+        break;
+      if (bytesRead + chunk.length > MAX_STDIN_BYTES) {
+        process.exit(0);
+      }
+      chunk.copy(stdinBuffer, bytesRead);
+      bytesRead += chunk.length;
+    }
   } catch (e) {
-    process.exit(0);
-  }
-  const eventType = eventPayload.type || eventPayload.event;
-  const workspacePath = eventPayload.cwd || process.cwd();
-  if (!eventType)
-    process.exit(0);
-  const relevantEvents = ["PreCompact", "StopFailure", "Stop", "SessionEnd", "SessionStart", "PostCompact"];
-  if (!relevantEvents.includes(eventType))
-    process.exit(0);
-  if (["PreCompact", "StopFailure", "Stop", "SessionEnd"].includes(eventType)) {
-    try {
-      const head = (0, import_child_process.execSync)("git rev-parse HEAD", { cwd: workspacePath, stdio: "pipe" }).toString().trim();
-      const branch = (0, import_child_process.execSync)("git rev-parse --abbrev-ref HEAD", { cwd: workspacePath, stdio: "pipe" }).toString().trim();
-      const status = (0, import_child_process.execSync)("git status --porcelain", { cwd: workspacePath, stdio: "pipe" }).toString().trim();
-      const isDirty = status.length > 0;
-      const checkpoint = {
-        schemaVersion: "1.0",
-        id: crypto.randomBytes(8).toString("hex"),
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        type: eventType === "PreCompact" || eventType === "StopFailure" ? "recovery" : "lightweight",
-        reason: eventType,
-        workspace: {
-          path: workspacePath,
-          name: path.basename(workspacePath)
-        },
-        git: { head, branch, isDirty }
-      };
-      const dir = path.join(workspacePath, ".relay", "checkpoints");
-      if (!fs.existsSync(dir))
-        fs.mkdirSync(dir, { recursive: true });
-      const filePath = path.join(dir, `${checkpoint.id}.json`);
-      const tempPath = `${filePath}.tmp.${crypto.randomBytes(4).toString("hex")}`;
-      fs.writeFileSync(tempPath, JSON.stringify(checkpoint, null, 2), "utf-8");
-      fs.renameSync(tempPath, filePath);
-    } catch (e) {
+    if (e.code === "EOF" || e.code === "EAGAIN") {
+    } else {
       process.exit(0);
     }
   }
-  process.exit(0);
+  if (bytesRead === 0)
+    process.exit(0);
+  const payloadStr = stdinBuffer.subarray(0, bytesRead).toString("utf-8");
+  let eventPayload;
+  try {
+    eventPayload = JSON.parse(payloadStr);
+  } catch (e) {
+    process.exit(0);
+  }
+  if (typeof eventPayload !== "object" || eventPayload === null)
+    process.exit(0);
+  const eventType = eventPayload.type || eventPayload.event;
+  if (typeof eventType !== "string" || eventType.length > 64)
+    process.exit(0);
+  const workspaceInput = eventPayload.cwd || process.cwd();
+  if (typeof workspaceInput !== "string" || workspaceInput.length > 1024)
+    process.exit(0);
+  const handlers = {
+    "SessionStart": true,
+    "PreCompact": true,
+    "StopFailure": true
+  };
+  if (!handlers[eventType])
+    process.exit(0);
+  let workspaceRoot;
+  try {
+    workspaceRoot = fs.realpathSync(path.resolve(workspaceInput));
+  } catch (e) {
+    process.exit(0);
+  }
+  const relayDir = path.join(workspaceRoot, ".relay");
+  const checkpointsDir = path.join(relayDir, "checkpoints");
+  if (!checkpointsDir.startsWith(workspaceRoot)) {
+    process.exit(0);
+  }
+  try {
+    const headRes = (0, import_child_process.spawnSync)("git", ["rev-parse", "HEAD"], { cwd: workspaceRoot, stdio: "pipe", encoding: "utf-8", timeout: 5e3, shell: false });
+    const branchRes = (0, import_child_process.spawnSync)("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: workspaceRoot, stdio: "pipe", encoding: "utf-8", timeout: 5e3, shell: false });
+    const statusRes = (0, import_child_process.spawnSync)("git", ["status", "--porcelain"], { cwd: workspaceRoot, stdio: "pipe", encoding: "utf-8", timeout: 5e3, shell: false });
+    const head = headRes.stdout ? headRes.stdout.trim() : "unknown";
+    const branch = branchRes.stdout ? branchRes.stdout.trim() : "unknown";
+    const isDirty = statusRes.stdout ? statusRes.stdout.trim().length > 0 : false;
+    const checkpoint = {
+      schemaVersion: "1.0",
+      id: crypto.randomBytes(8).toString("hex"),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      type: eventType === "PreCompact" || eventType === "StopFailure" ? "recovery" : "lightweight",
+      reason: eventType,
+      workspace: {
+        path: workspaceRoot,
+        name: path.basename(workspaceRoot)
+      },
+      git: { head, branch, isDirty }
+    };
+    if (!fs.existsSync(checkpointsDir)) {
+      fs.mkdirSync(checkpointsDir, { recursive: true });
+    }
+    const realCheckpointsDir = fs.realpathSync(checkpointsDir);
+    if (!realCheckpointsDir.startsWith(workspaceRoot)) {
+      process.exit(0);
+    }
+    const filePath = path.join(realCheckpointsDir, `${checkpoint.id}.json`);
+    const tempPath = `${filePath}.tmp.${crypto.randomBytes(4).toString("hex")}`;
+    fs.writeFileSync(tempPath, JSON.stringify(checkpoint, null, 2), "utf-8");
+    fs.renameSync(tempPath, filePath);
+  } catch (e) {
+    process.exit(0);
+  }
 }
 main().catch(() => process.exit(0));
