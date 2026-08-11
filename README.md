@@ -1,37 +1,39 @@
 # Claude Relay
 
-Claude Relay is an automatic session continuity extension for Claude Code. It safely preserves deterministic project state and semantic checkpoints during your coding sessions to ensure you never lose context when you hit usage quotas or close your terminal.
+Automatic session continuity for Claude Code.
 
-*Claude Relay is an independent open-source project and is not affiliated with or endorsed by Anthropic.*
+## Install
 
-## Architecture
-- **Core Engine**: A platform-agnostic deterministic snapshot tool and JSON schema manager.
-- **Hook Runner**: A completely self-contained `.cjs` hook runtime invoked automatically by Claude Code during `PreCompact`, `StopFailure`, and `SessionStart`.
-- **VS Code Extension**: A lightweight dashboard and command suite for managing your Claude Relay state natively in the editor.
+### Recommended: Claude Plugin + VS Code Companion
 
-## Status (v0.1)
-- Hook runtime correctly merges into `~/.claude/settings.json` idempotently.
-- Deterministic checkpoints include Git states, atomic writes, and schema validation.
-- Commands implemented: Setup, Checkpoint, Resume, Health Check, Handoffs.
+**Claude Plugin**:
+automatic lifecycle protection
 
-## Installation
-Claude Relay v0.1.0 is available from GitHub Releases.
+**VS Code Extension**:
+dashboard and recovery controls
 
-1. Download `claude-relay-0.1.0.vsix` from the latest GitHub Release.
+### Claude Plugin Only
+For Claude Code terminal or IDE users who want automatic continuity without the companion dashboard.
 
-2. Install through:
-   VS Code -> Extensions -> ... -> Install from VSIX...
-   or:
-   ```bash
-   code --install-extension claude-relay-0.1.0.vsix
-   ```
+```bash
+claude plugin marketplace add chidhvilasa/claude-relay
+claude plugin install claude-relay@clauderelay-oss
+```
 
-3. Run:
-   ```
-   Claude Relay: Set Up
-   ```
+### VS Code Companion Only
+Manual Relay features only.
+Automatic lifecycle recovery requires the Claude Relay Plugin.
 
-4. Run:
-   ```
-   Claude Relay: Health Check
-   ```
+## Security
+- **No Auth**: Claude Relay handles zero authentication and has no access to your credentials.
+- **Network Zero**: The standalone plugin runtime executes completely offline.
+- **Untrusted State**: Restored checkpoints and handoffs are treated strictly as untrusted context, safeguarding you against prompt injection.
+
+## Migration
+Upgrading from v0.1.0? Your existing `.relay` history is compatible. The VS Code extension will safely guide you to migrate your legacy hooks to the new Claude Plugin structure.
+
+## How it works
+Relay hooks into Claude Code's PreCompact and StopFailure events to deterministically capture a Git snapshot of your workspace. Upon SessionStart, it loads this snapshot or a generated handoff so you never lose context!
+
+## Known limitations
+- Relay only supports deterministic history and semantic context files. It does not restore active terminal histories outside of Claude.
