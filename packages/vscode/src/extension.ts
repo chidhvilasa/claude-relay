@@ -1,66 +1,61 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { RelayDashboardProvider } from './dashboard';
+import { PluginManager } from './integration/plugin-manager';
+import { LegacyMigrator } from './integration/legacy-migrator';
 
 export async function activate(context: vscode.ExtensionContext) {
-  console.log('Claude Relay is now active!');
-
   const outputChannel = vscode.window.createOutputChannel('Claude Relay');
   outputChannel.appendLine('Claude Relay activated.');
 
   const dashboardProvider = new RelayDashboardProvider();
   vscode.window.registerTreeDataProvider('claudeRelayDashboard', dashboardProvider);
 
-  let setupCmd = vscode.commands.registerCommand('claudeRelay.setup', async () => {
-    try {
-      const { ClaudeConfigInstaller } = require('@claude-relay/core');
-      const os = require('os');
-      const path = require('path');
-      const installer = new ClaudeConfigInstaller(os.homedir());
-      const runnerPath = path.join(context.extensionPath, 'dist', 'hook-runner.cjs');
-      const skillPath = path.join(context.extensionPath, '..', '..', 'claude', 'skill', 'SKILL.md');
-      const success = await installer.installIntegration(runnerPath, skillPath);
-      if (success) {
-        vscode.window.showInformationMessage('Claude Relay installed successfully!');
-      } else {
-        vscode.window.showErrorMessage('Failed to install Claude Relay hooks.');
-      }
-    } catch (e: any) {
-      vscode.window.showErrorMessage('Setup error: ' + e.message);
-    }
-  });
+  const pluginManager = new PluginManager();
+  const migrator = new LegacyMigrator();
 
-  let healthCheckCmd = vscode.commands.registerCommand('claudeRelay.healthCheck', () => {
-    vscode.window.showInformationMessage('Claude Relay Health Check: PASS (Stub)');
+  const status = await pluginManager.getOverallStatus();
+  if (status === 'PLUGIN_AND_LEGACY_CONFLICT' || status === 'LEGACY_INTEGRATION') {
+    vscode.window.showWarningMessage(
+      'Claude Relay: Legacy v0.1 hooks detected.',
+      'Migrate to Plugin', 'Dismiss'
+    ).then(async selection => {
+      if (selection === 'Migrate to Plugin') {
+        const result = await migrator.migrate();
+        if (result.success) {
+          vscode.window.showInformationMessage('Successfully migrated to Claude Relay Plugin format. Please ensure you have run "claude plugin install claude-relay@clauderelay-oss".');
+          dashboardProvider.refresh();
+        } else {
+          vscode.window.showErrorMessage('Migration failed: ' + result.error);
+        }
+      }
+    });
+  } else if (status === 'NOT_INSTALLED') {
+    vscode.window.showInformationMessage(
+      'Claude Relay Plugin not detected. Automatic protection is unavailable.',
+      'How to Install', 'Dismiss'
+    ).then(selection => {
+      if (selection === 'How to Install') {
+        vscode.window.showInformationMessage('Run: "claude plugin marketplace add chidhvilasa/claude-relay" then "claude plugin install claude-relay@clauderelay-oss"');
+      }
+    });
+  }
+
+  let healthCheckCmd = vscode.commands.registerCommand('claudeRelay.healthCheck', async () => {
+    const currentStatus = await pluginManager.getOverallStatus();
+    vscode.window.showInformationMessage(`Claude Relay Status: ${currentStatus}`);
   });
 
   let checkpointCmd = vscode.commands.registerCommand('claudeRelay.checkpoint', () => {
-    vscode.window.showInformationMessage('Created deterministic checkpoint.');
+    vscode.window.showInformationMessage('Created manual deterministic checkpoint.');
   });
 
   let handoffCmd = vscode.commands.registerCommand('claudeRelay.handoff', () => {
-    vscode.window.showInformationMessage('Created handoff.');
+    vscode.window.showInformationMessage('Created manual handoff.');
   });
 
   let resumeCmd = vscode.commands.registerCommand('claudeRelay.resume', () => {
     vscode.window.showInformationMessage('Resuming task...');
   });
-
-  // Check for unresolved work
-  if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-    const wsPath = vscode.workspace.workspaceFolders[0].uri.fsPath;
-    // Mock check for now
-    setTimeout(() => {
-       vscode.window.showInformationMessage(
-         'Claude Relay found unfinished work from your previous session.',
-         'Resume Previous Task', 'View Handoff', 'Dismiss'
-       ).then(selection => {
-         if (selection === 'Resume Previous Task') {
-           vscode.commands.executeCommand('claudeRelay.resume');
-         }
-       });
-    }, 2000);
-  }
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = '$(sync~spin) Relay: Ready';
@@ -68,41 +63,8 @@ export async function activate(context: vscode.ExtensionContext) {
   statusBarItem.command = 'claudeRelay.healthCheck';
   statusBarItem.show();
 
-  let openLatestHandoffCmd = vscode.commands.registerCommand('claudeRelay.openLatestHandoff', () => {
-    vscode.window.showInformationMessage('Opening latest handoff (mock)');
-  });
-
-  let openDashboardCmd = vscode.commands.registerCommand('claudeRelay.openDashboard', () => {
-    vscode.window.showInformationMessage('Dashboard (mock)');
-  });
-
-  let clearResolvedHandoffCmd = vscode.commands.registerCommand('claudeRelay.clearResolvedHandoff', () => {
-    vscode.window.showInformationMessage('Cleared resolved handoffs (mock)');
-  });
-
-  let reinstallCmd = vscode.commands.registerCommand('claudeRelay.reinstallClaudeIntegration', () => {
-    vscode.commands.executeCommand('claudeRelay.setup');
-  });
-
-  let uninstallCmd = vscode.commands.registerCommand('claudeRelay.removeClaudeIntegration', async () => {
-    try {
-      const { ClaudeConfigInstaller } = require('@claude-relay/core');
-      const os = require('os');
-      const installer = new ClaudeConfigInstaller(os.homedir());
-      if (await installer.uninstallIntegration()) {
-        vscode.window.showInformationMessage('Claude Relay removed successfully.');
-      }
-    } catch (e) {}
-  });
-
-  let showLogsCmd = vscode.commands.registerCommand('claudeRelay.showLogs', () => {
-    outputChannel.show();
-  });
-
   context.subscriptions.push(
-    setupCmd, healthCheckCmd, checkpointCmd, handoffCmd, resumeCmd, 
-    openLatestHandoffCmd, openDashboardCmd, clearResolvedHandoffCmd, 
-    reinstallCmd, uninstallCmd, showLogsCmd, 
+    healthCheckCmd, checkpointCmd, handoffCmd, resumeCmd,
     statusBarItem, outputChannel
   );
 }

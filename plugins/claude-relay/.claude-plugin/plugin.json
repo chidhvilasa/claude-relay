@@ -1,0 +1,13 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "claude-relay",
+  "version": "0.2.0",
+  "description": "Continuous session persistence and semantic recovery for Claude Code",
+  "author": {
+    "name": "Claude Relay OSS",
+    "email": "open-source@clauderelay.oss"
+  },
+  "skills": [
+    "./skills/relay"
+  ]
+}

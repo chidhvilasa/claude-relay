@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
+import { PluginManager } from './integration/plugin-manager';
 
 export class RelayDashboardProvider implements vscode.TreeDataProvider<DashboardItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<DashboardItem | undefined | void> = new vscode.EventEmitter<DashboardItem | undefined | void>();
   readonly onDidChangeTreeData: vscode.Event<DashboardItem | undefined | void> = this._onDidChangeTreeData.event;
+  private pluginManager = new PluginManager();
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
@@ -18,14 +19,34 @@ export class RelayDashboardProvider implements vscode.TreeDataProvider<Dashboard
       return [];
     }
 
+    const status = await this.pluginManager.getOverallStatus();
+    let pluginDesc = 'Unknown';
+    let protectionDesc = 'Unavailable';
+    let legacyDesc = 'None';
+
+    if (status === 'INSTALLED') {
+      pluginDesc = 'Active';
+      protectionDesc = 'Active';
+    } else if (status === 'NOT_INSTALLED') {
+      pluginDesc = 'Not Installed';
+      protectionDesc = 'Unavailable (Plugin not installed)';
+    } else if (status === 'LEGACY_INTEGRATION') {
+      pluginDesc = 'Not Installed';
+      protectionDesc = 'Active (Legacy)';
+      legacyDesc = 'Active';
+    } else if (status === 'PLUGIN_AND_LEGACY_CONFLICT') {
+      pluginDesc = 'Active';
+      protectionDesc = 'Conflict (Both Active)';
+      legacyDesc = 'Active (Conflict)';
+    }
+
     return [
       new DashboardItem('Claude Code', 'Detected', vscode.TreeItemCollapsibleState.None),
-      new DashboardItem('Claude Integration', 'Installed', vscode.TreeItemCollapsibleState.None),
-      new DashboardItem('Repository', vscode.workspace.name || 'Unknown', vscode.TreeItemCollapsibleState.None),
-      new DashboardItem('Recovery', 'Active', vscode.TreeItemCollapsibleState.None),
-      new DashboardItem('Handoff', 'None', vscode.TreeItemCollapsibleState.None),
-      new DashboardItem('Usage Context', 'Unavailable', vscode.TreeItemCollapsibleState.None),
-      new DashboardItem('Health', 'PASS', vscode.TreeItemCollapsibleState.None)
+      new DashboardItem('Claude Relay Plugin', pluginDesc, vscode.TreeItemCollapsibleState.None),
+      new DashboardItem('Automatic protection', protectionDesc, vscode.TreeItemCollapsibleState.None),
+      new DashboardItem('Legacy integration', legacyDesc, vscode.TreeItemCollapsibleState.None),
+      new DashboardItem('Recovery', 'Last checkpoint: unknown, Handoff: None', vscode.TreeItemCollapsibleState.None),
+      new DashboardItem('Repository', vscode.workspace.name || 'Unknown', vscode.TreeItemCollapsibleState.None)
     ];
   }
 }

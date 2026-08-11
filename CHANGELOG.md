@@ -1,31 +1,18 @@
 # Changelog
 
-## [0.1.0] - 2026-08-11
+## [0.2.0]
 ### Added
-- Deterministic checkpoints
-- Standalone Claude hook runtime
-- SessionStart integration
-- PreCompact recovery
-- Stop/StopFailure/SessionEnd handling
-- Semantic handoffs
-- Canonical JSON handoff format
-- WAKEUP.md projection
-- Git-aware reconciliation
-- Stale-state detection
-- Integrity hashes
-- JSON Schema validation
-- VS Code Dashboard
-- Health Check
-- One-click Claude integration setup
-- Safe configuration merging
-- Config backup and rollback
-- Clean integration removal
-- Local-first operation
-- Packaged VSIX with bundled runtime dependencies
+- Claude Relay Plugin manifest (`plugin.json`).
+- Claude Relay Marketplace manifest (`marketplace.json`) pointing to immutable Git tag.
+- Standalone zero-dependency `hook-runtime` executing via `spawnSync`.
+- Native Claude Code Skill (`/claude-relay:relay`) bundled within plugin.
+- Companion VS Code Extension dashboard for Plugin tracking.
+- Automated legacy hook migrator (`LegacyMigrator`).
 
-### Security
-- Added JSON Schema (Ajv) enforcement at handoff and checkpoint boundaries.
-- Standalone runner is entirely decoupled from repo node_modules.
+### Changed
+- Refactored `extension.ts` to remove legacy automatic hook injection into `settings.json`.
+- Restructured workspace packages to isolate `hook-runtime` from `vscode` dependencies.
+- Tightened filesystem boundaries and path resolutions across the core API.
 
-### Known Limitations
-- Exact Claude subscription usage percentage requires official metadata provider access.
+### Removed
+- `PostCompact`, `Stop`, and `SessionEnd` automatic hooks to minimize attack surface.

@@ -2,7 +2,7 @@
   "name": "claude-relay",
   "displayName": "Claude Relay",
   "description": "Automatic session continuity for Claude Code.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "clauderelay-oss",
   "engines": {
     "vscode": "^1.90.0"
@@ -91,7 +91,7 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run build",
-    "build": "esbuild src/extension.ts --bundle --external:vscode --format=cjs --platform=node --outfile=dist/extension.js && esbuild ../core/src/claude/hook-runner-standalone.ts --bundle --platform=node --outfile=dist/hook-runner.cjs",
+    "build": "esbuild src/extension.ts --bundle --external:vscode --format=cjs --platform=node --outfile=dist/extension.js",
     "watch": "tsc -watch -p ./",
     "pretest": "pnpm run build",
     "test": "tsc -p ./ && node dist/test/runTest.js",
