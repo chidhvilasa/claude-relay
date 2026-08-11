@@ -1,4 +1,6 @@
 packages:
-  - 'packages/*'
+  - 'packages/core'
+  - 'packages/vscode'
+  - 'packages/hook-runtime'
 allowBuilds:
   esbuild: true
