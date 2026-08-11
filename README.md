@@ -15,5 +15,23 @@ Claude Relay is an automatic session continuity extension for Claude Code. It sa
 - Commands implemented: Setup, Checkpoint, Resume, Health Check, Handoffs.
 
 ## Installation
-Currently in development. Install via VSIX:
-`code --install-extension claude-relay-0.1.0.vsix`
+Claude Relay v0.1.0 is available from GitHub Releases.
+
+1. Download `claude-relay-0.1.0.vsix` from the latest GitHub Release.
+
+2. Install through:
+   VS Code -> Extensions -> ... -> Install from VSIX...
+   or:
+   ```bash
+   code --install-extension claude-relay-0.1.0.vsix
+   ```
+
+3. Run:
+   ```
+   Claude Relay: Set Up
+   ```
+
+4. Run:
+   ```
+   Claude Relay: Health Check
+   ```

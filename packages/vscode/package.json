@@ -95,7 +95,8 @@
     "watch": "tsc -watch -p ./",
     "pretest": "pnpm run build",
     "test": "tsc -p ./ && node dist/test/runTest.js",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "package": "npx vsce package --no-dependencies"
   },
   "dependencies": {
     "@claude-relay/core": "workspace:*"
