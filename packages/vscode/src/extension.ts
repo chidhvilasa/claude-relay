@@ -70,8 +70,6 @@ export async function activate(context: vscode.ExtensionContext) {
     return status;
   }
 
-  await checkStartupStatus();
-
   const setupCmd = vscode.commands.registerCommand('claudeRelay.setup', async () => {
     const choice = await vscode.window.showInformationMessage(
       `Install the Claude Relay Plugin for automatic protection:\n${INSTALL_INSTRUCTIONS}`,
@@ -262,6 +260,17 @@ export async function activate(context: vscode.ExtensionContext) {
     reinstallClaudeIntegrationCmd, removeClaudeIntegrationCmd, showLogsCmd,
     statusBarItem, outputChannel
   );
+
+  // Every command above is registered synchronously before this point, so
+  // they're available immediately regardless of how long plugin detection
+  // takes. checkStartupStatus() shells out to the `claude` CLI (bounded by a
+  // 5s timeout, but not instant) — deliberately not awaited here, so a slow
+  // or hanging CLI delays only the startup notification, never command
+  // availability. (Previously this was awaited before any command was
+  // registered, so every Claude Relay command was "command not found" for
+  // however long that check took — caught by the extension-host test
+  // suite, not assumed.)
+  checkStartupStatus().catch(e => log(`Startup status check failed: ${e.message}`));
 }
 
 export function deactivate() {}
