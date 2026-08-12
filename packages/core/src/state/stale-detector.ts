@@ -15,9 +15,11 @@ export class StaleDetector {
     }
 
     // Check if dirty state changed significantly
-    // For a strict approach, if the lengths of modified files don't match, it's possibly stale
-    const handoffDirtyCount = handoff.git.staged.length + handoff.git.unstaged.length + handoff.git.untracked.length;
-    const currentDirtyCount = currentGit.staged.length + currentGit.unstaged.length + currentGit.untracked.length;
+    // For a strict approach, if the lengths of modified files don't match, it's possibly stale.
+    // staged/unstaged/untracked are not required by the handoff JSON schema, so a schema-valid
+    // handoff may not carry them — guard against undefined rather than crashing resume/staleness checks.
+    const handoffDirtyCount = (handoff.git.staged?.length ?? 0) + (handoff.git.unstaged?.length ?? 0) + (handoff.git.untracked?.length ?? 0);
+    const currentDirtyCount = (currentGit.staged?.length ?? 0) + (currentGit.unstaged?.length ?? 0) + (currentGit.untracked?.length ?? 0);
 
     if (handoffDirtyCount !== currentDirtyCount) {
       return "POSSIBLY_STALE";

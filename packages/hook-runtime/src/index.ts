@@ -10,6 +10,7 @@ async function main() {
   let bytesRead = 0;
   
   try {
+    // eslint-disable-next-line no-constant-condition -- intentional read loop, exited via break/process.exit below
     while (true) {
       const chunk = fs.readFileSync(0); // sync read from stdin
       if (chunk.length === 0) break; // EOF
