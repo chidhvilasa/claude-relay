@@ -1,9 +1,38 @@
 {
   "name": "claude-relay",
   "displayName": "Claude Relay",
-  "description": "Automatic session continuity for Claude Code.",
-  "version": "0.2.1",
+  "description": "Session continuity, recovery, checkpoints, and handoffs for Claude Code.",
+  "version": "0.2.2",
   "publisher": "clauderelay-oss",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chidhvilasa/claude-relay.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chidhvilasa/claude-relay/issues"
+  },
+  "homepage": "https://github.com/chidhvilasa/claude-relay#readme",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "keywords": [
+    "claude",
+    "claude code",
+    "claude relay",
+    "ai",
+    "coding assistant",
+    "developer tools",
+    "session continuity",
+    "context recovery",
+    "recovery",
+    "checkpoint",
+    "checkpoints",
+    "handoff",
+    "handoffs",
+    "session recovery",
+    "context",
+    "agent",
+    "git"
+  ],
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -96,6 +125,7 @@
     "pretest": "pnpm run build",
     "test": "tsc -p ./ && node dist/test/runTest.js",
     "lint": "eslint src --ext ts",
+    "typecheck": "tsc -p ./ --noEmit",
     "package": "npx vsce package --no-dependencies"
   },
   "dependencies": {
@@ -105,7 +135,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.90.0",
-    "@vscode/test-electron": "^2.4.1",
+    "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.28.2",
     "glob": "^11.0.1",
     "mocha": "^11.1.0",

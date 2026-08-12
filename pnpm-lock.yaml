@@ -93,8 +93,8 @@ importers:
         specifier: ^1.90.0
         version: 1.125.0
       '@vscode/test-electron':
-        specifier: ^2.4.1
-        version: 2.5.2(supports-color@8.1.1)
+        specifier: ^3.1.0
+        version: 3.1.0(supports-color@8.1.1)
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -855,10 +855,6 @@ packages:
 
   '@vitest/utils@2.1.9':
     resolution: {integrity: sha512-v0psaMSkNJ3A2NMrUEHFRzJtDPFn+/VWZ5WxImB21T9fjucJRmS7xCS3ppEnARb9y11OAzaD+P2Ps+b+BGX5iQ==}
-
-  '@vscode/test-electron@2.5.2':
-    resolution: {integrity: sha512-8ukpxv4wYe0iWMRQU18jhzJOHkeGKbnw7xWRX3Zw1WJA4cEKbHcmmLPdPrPtL6rhDcrlCZN+xKRpv09n4gRHYg==}
-    engines: {node: '>=16'}
 
   '@vscode/test-electron@3.1.0':
     resolution: {integrity: sha512-CRqv5u+YYoseuNVJ6Tyo4k0sF0mx4qnKMihRB0PjsUF8Dc0WKtCXo6CNL6nWWm5esfFQsQA/pejMj4ZbpJVLTw==}
@@ -2289,16 +2285,6 @@ snapshots:
       '@vitest/pretty-format': 2.1.9
       loupe: 3.2.1
       tinyrainbow: 1.2.0
-
-  '@vscode/test-electron@2.5.2(supports-color@8.1.1)':
-    dependencies:
-      http-proxy-agent: 7.0.2(supports-color@8.1.1)
-      https-proxy-agent: 7.0.6(supports-color@8.1.1)
-      jszip: 3.10.1
-      ora: 8.2.0
-      semver: 7.8.5
-    transitivePeerDependencies:
-      - supports-color
 
   '@vscode/test-electron@3.1.0(supports-color@8.1.1)':
     dependencies:
