@@ -75,9 +75,65 @@ called from the extension:
 - No network code, no authentication/credential handling, no automatic Git mutation (commit/push/reset/
   etc.) anywhere in `packages/core`, `packages/hook-runtime`, or `packages/vscode`.
 - No webview exists in this extension, so webview-specific hardening doesn't apply yet.
-- `packages/core` test suite: 17/17 passing (`state-machine`, `redactor`, `usage-providers`, `security`).
 - Atomic writes (temp file + rename) were already correct in `checkpoint-store.ts` and `handoff-store.ts`
   prior to this release.
+
+## Fixed — found by writing real tests, not by inspection alone
+A second pass added automated coverage (Core 28→28 unchanged plus 11 new; Hook Runtime 0→17; VS Code
+Unit 0→40; VS Code Host 2→4) and every one of the following was caught *by* that coverage, not before it:
+
+- **Checkpoints/handoffs immediately reported `POSSIBLY_STALE` in any project that hadn't manually
+  gitignored `.relay/`.** Root cause: writing a checkpoint or handoff adds new files under `.relay/`,
+  which `git status --porcelain` reports as a single new `?? .relay/` entry; `StaleDetector` compares
+  dirty-file *counts*, so the count taken before the write no longer matched the count taken right after.
+  A handoff could look stale seconds after being created, for no real reason. Fixed at the root: `.relay/`
+  now self-gitignores (`.relay/.gitignore` containing `*`), written by `LocalCheckpointStore`,
+  `LocalHandoffStore`, and the hook-runtime, so Relay's own writes never appear in `git status` at all.
+- **`plugin-detector.ts`'s `execFile(..., { shell: false })` — the exact hardening this branch's first
+  commit introduced — failed with `ENOENT` on Windows for any `claude` CLI installed the standard way
+  (`npm install -g`, which produces a `.cmd` shim).** Windows' `CreateProcess`, what `execFile` uses under
+  `shell:false`, doesn't do `PATHEXT` resolution the way `cmd.exe` does; only a shell does. Reproduced
+  directly (a real `claude.cmd` failed to spawn) and fixed by using `shell: process.platform === 'win32'`
+  — safe here because every argument is a fixed literal, never user/repo-controlled, and Node quotes array
+  arguments passed through a Windows shell rather than concatenating a raw string the way the original
+  `exec('claude plugin list --json')` did.
+- **Every Claude Relay command was "command not found" for however long plugin detection took after VS
+  Code started**, because `activate()` awaited the plugin-status CLI check *before* registering any
+  command. Reordered so all commands register synchronously first; the status check now runs
+  fire-and-forget afterward.
+- **The extension-host test suite (`@vscode/test-electron`) was not actually blocked by a stale cache
+  lock, as the previous revision of this document claimed** — the real cause was `ELECTRON_RUN_AS_NODE=1`
+  being set globally in this sandboxed dev environment, which makes any Electron binary a tool spawns run
+  as plain Node instead of launching its app shell. `runTest.ts` now explicitly unsets it for the test
+  subprocess and uses an isolated, OS-temp download cache and per-run profile dir instead of the
+  repo-local one. The suite now runs and passes for real: 4/4 (see `docs/CURRENT_PLATFORM_COMPATIBILITY.md`
+  for the full account, including the correction of the earlier claim).
+- `tsc --noEmit` never actually covered `packages/*/tests/` in any package (only `src/`), so type errors
+  in test code were invisible to `pnpm typecheck`. Added a `tsconfig.typecheck.json` per package that
+  includes tests; wired `typecheck` scripts to use it.
+- `hook-runtime`'s `package.json` claimed a `main` pointing at a file that was never produced
+  (`dist/hook-runner.cjs`; the real build output is `../../plugins/claude-relay/runtime/hook-runner.cjs`)
+  and declared `@claude-relay/core` as a dependency it never imports. Both corrected.
+
+## New automated coverage added this release
+- `packages/core/tests/stale-detector.test.ts` (7), `relay-dir.test.ts` (4)
+- `packages/hook-runtime/tests/hook-runner.test.ts` (17) — the package had zero automated tests before
+  this release; it now covers malformed/oversized/hostile input, git timeout/unavailable, path edge cases
+  (spaces, Unicode), symlink-escape refusal, cross-repo isolation, and crash-survives-prior-state
+- `packages/vscode/tests/relay-service.test.ts` (7), `legacy-migration.test.ts` (13),
+  `plugin-detector.test.ts` (9), `marketplace-metadata.test.ts` (11)
+- `packages/vscode/src/test/suite/extension.test.ts` strengthened from checking 5 of 11 commands to all
+  11, plus new checks that the dashboard view registers and activation doesn't throw
+
+## A note on Plugin versioning
+`plugins/claude-relay/runtime/hook-runner.cjs` — the actual compiled artifact the Claude Relay Plugin
+ships and runs — changed in this branch (the self-gitignore fix above is a real behavior change, not
+cosmetic). `plugins/claude-relay/.claude-plugin/plugin.json` was deliberately left at `0.2.0` per this
+task's instruction not to bump the plugin without a concrete defect. That instruction's own condition
+was met here, though: this **is** a real, if subtle, plugin defect (an inaccurate freshness signal), now
+fixed. Whether that alone justifies a plugin patch release, or whether it should be bundled with a future
+change, is left as a decision for the maintainer — flagged here rather than resolved unilaterally, since
+plugin releases go through a separate marketplace/tag process than the Companion.
 
 ## Not verified in this release (requires a human driving VS Code / Claude Code interactively)
 Live testing through the actual Claude Code VS Code extension (`/plugins`, real `SessionStart`/
@@ -87,7 +143,16 @@ accessibility/screen-reader passes were not performed — they require a live, h
 this audit did not have. See the audit summary for the full list.
 
 ## Compatibility
-Compatible with: Claude Relay Plugin v0.2.0 (unchanged; no plugin defect found).
+Compatible with: Claude Relay Plugin v0.2.0. See "A note on Plugin versioning" above — one real (if
+subtle) plugin-runtime defect was found and fixed in this branch; `plugin.json` was deliberately not
+bumped, pending a maintainer decision.
 
 ## Remote environments
-No change this release. Still degraded as before; not re-verified live (see above).
+No change this release. Still degraded as before; not re-verified live (see
+`docs/CURRENT_PLATFORM_COMPATIBILITY.md`).
+
+## Candidate artifact
+`packages/vscode/claude-relay-0.2.2.vsix` — 16 files, 83,845 bytes. See the audit report for the current
+SHA-256; note that this VSIX is not byte-for-byte reproducible across builds (zip entry timestamps differ
+between packaging runs even with identical source), though the file list and size are stable — see
+`docs/GIT_HISTORY_RECONCILIATION.md`-adjacent notes in the audit report for that finding.

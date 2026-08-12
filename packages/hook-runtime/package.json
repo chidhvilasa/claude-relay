@@ -2,17 +2,16 @@
   "name": "@claude-relay/hook-runtime",
   "version": "0.2.0",
   "private": true,
-  "main": "dist/hook-runner.cjs",
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --outfile=../../plugins/claude-relay/runtime/hook-runner.cjs",
     "lint": "eslint src --ext ts",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@claude-relay/core": "workspace:*"
+    "typecheck": "tsc --project tsconfig.typecheck.json",
+    "pretest": "pnpm run build",
+    "test": "vitest run tests"
   },
   "devDependencies": {
     "esbuild": "^0.20.0",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
   }
 }

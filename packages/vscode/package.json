@@ -34,7 +34,7 @@
     "git"
   ],
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.74.0"
   },
   "categories": [
     "Other"
@@ -123,9 +123,11 @@
     "build": "esbuild src/extension.ts --bundle --external:vscode --format=cjs --platform=node --outfile=dist/extension.js",
     "watch": "tsc -watch -p ./",
     "pretest": "pnpm run build",
-    "test": "tsc -p ./ && node dist/test/runTest.js",
+    "test": "pnpm run test:unit && tsc -p ./ && node dist/test/runTest.js",
+    "test:unit": "vitest run tests",
+    "test:host": "tsc -p ./ && node dist/test/runTest.js",
     "lint": "eslint src --ext ts",
-    "typecheck": "tsc -p ./ --noEmit",
+    "typecheck": "tsc --project tsconfig.typecheck.json",
     "package": "npx vsce package --no-dependencies"
   },
   "dependencies": {
@@ -134,7 +136,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "1.74.0",
     "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.28.2",
     "glob": "^11.0.1",

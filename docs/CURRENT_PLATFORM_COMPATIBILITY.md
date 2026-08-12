@@ -44,16 +44,27 @@ Git branch/HEAD/dirty state. It was also fed malformed JSON, an unrecognized eve
 - Marketplace search indexing latency and multi-profile/clean-VS-Code-instance search behavior.
 - Accessibility (screen reader, high contrast, keyboard-only) passes.
 
-## A note on the extension-host test suite specifically
-`pnpm --filter claude-relay test` (which runs `@vscode/test-electron`'s `runTests()`) could not be run to
-a clean pass in this session: this machine's `packages/vscode/.vscode-test` cache had a locked directory
-(`Device or resource busy`) consistent with an already-running `Code.exe` process holding it open — very
-plausibly one of the many `Code.exe` processes already running on this machine, including the one this
-audit itself was performed inside of. Force-clearing or killing arbitrary `Code.exe` processes to work
-around that was judged too risky to do unsupervised (real risk of killing the user's actual editor
-session) and was not attempted. Everything upstream of that — `tsc -p ./` and the `pretest` build — passed
-cleanly, and the underlying bug that *was* reproducible (the space-in-path argument-splitting issue, see
-`docs/RELEASE_NOTES_V0_2_2.md`) was fixed and confirmed via the corrected, unsplit argument in the error
-output before the run hit the unrelated cache lock. Re-run `pnpm --filter claude-relay test` after closing
-other VS Code windows, or after deleting `packages/vscode/.vscode-test` outside of an active VS Code
-session, to get a clean extension-host test result.
+## Update: the extension-host test suite now runs and passes (resolved, not worked around)
+The prior revision of this document reported the extension-host suite (`@vscode/test-electron`'s
+`runTests()`) as blocked by a locked `.vscode-test` cache directory. That blocker is fixed, and the
+actual root cause was more specific — and more interesting — than a simple lock:
+
+1. **Space-in-path argument splitting** (fixed previously): `@vscode/test-electron@2.5.2`'s Windows
+   `shell:true` spawn split `--extensionTestsPath=...claude wake\...` on the space. Fixed by aligning to
+   `^3.1.0`, which only shells out for `.cmd` wrappers.
+2. **`ELECTRON_RUN_AS_NODE=1` is set globally in this sandboxed dev environment.** That variable makes
+   any Electron binary a tool spawns run as plain Node instead of launching its normal GUI/app shell —
+   almost certainly a deliberate sandbox default so headless tools don't accidentally pop windows. It
+   silently broke the downloaded VS Code test binary: `Code.exe --version` printed a *Node* version
+   (`v24.18.0`), and every VS Code CLI flag was rejected with `bad option: --no-sandbox` etc. — Node's
+   own arg parser, not VS Code's, because Electron never actually launched VS Code's app code.
+3. **The repo-local `.vscode-test/` cache was genuinely locked** (`Device or resource busy`) by another
+   process on this machine — plausibly this very editor session. Rather than investigate or kill
+   processes, `packages/vscode/src/test/runTest.ts` was changed to use an isolated download cache and a
+   fresh per-run user-data-dir/extensions-dir under the OS temp directory, entirely outside the repo, so
+   it can never collide with a currently-open VS Code instance again.
+
+With both fixed, `pnpm --filter claude-relay run test:host` (and the full `pnpm --filter claude-relay
+test`) passes for real: **4/4 passing** — extension present, all 11 declared commands registered with no
+`command not found`, the dashboard tree view registered, and activation completes without throwing.
+No process was killed and no other VS Code window was closed to achieve this.

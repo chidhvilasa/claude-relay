@@ -1,7 +1,24 @@
 # Changelog
 
 ## [0.2.2] - VS Code Companion only (Plugin remains 0.2.0)
-### Fixed
+### Fixed (found by writing real automated tests, second pass)
+- `.relay/` now self-gitignores — writing a checkpoint/handoff no longer changes `git status`'s dirty-file
+  count, which previously made a just-created handoff immediately report `POSSIBLY_STALE` in any project
+  that hadn't manually gitignored `.relay/`.
+- The `execFile(..., { shell: false })` hardening below broke plugin detection entirely on Windows for
+  any `claude` CLI installed via `npm install -g` (a `.cmd` shim) — Windows doesn't resolve `.cmd`/`.bat`
+  without a shell. Fixed with a platform-conditional shell, still safe since every argument is a fixed
+  literal.
+- All 11 commands now register *before* the async plugin-status check, not after — previously every
+  Claude Relay command was "command not found" for however long that check took after VS Code started.
+- The extension-host test suite now runs and passes (4/4): fixed `ELECTRON_RUN_AS_NODE` poisoning the
+  downloaded test binary in sandboxed dev environments, and moved the test cache/profile out of the repo.
+- `tsc --noEmit` never covered `tests/` in any package; added per-package typecheck configs that do.
+- Added automated test suites that didn't exist before: `hook-runtime` (17 tests, was 0), plus
+  `relay-service`, `legacy-migration`, `plugin-detector`, and `marketplace-metadata` suites for
+  `packages/vscode` (40 tests, was 2).
+
+### Fixed (first pass)
 - Manual `Create Checkpoint` / `Create Handoff Now` / `Resume Previous Task` commands were UI stubs;
   wired them to the existing (previously unused) `@claude-relay/core` storage/resume logic.
 - Registered 6 commands declared in `package.json` but never implemented (`setup`, `openLatestHandoff`,

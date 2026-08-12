@@ -1,8 +1,10 @@
 .vscode-test/**
 src/**
+tests/**
 dist/test/**
 dist/**/*.map
 tsconfig.json
+tsconfig.typecheck.json
 .eslintrc.js
 .gitignore
 *.vsix
