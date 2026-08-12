@@ -55,7 +55,18 @@ export class CLIPluginDetector implements ClaudePluginDetector {
       const { stdout } = await execFileAsync('claude', ['plugin', 'list', '--json'], {
         timeout: CLAUDE_CLI_TIMEOUT_MS,
         maxBuffer: MAX_STDOUT_BYTES,
-        shell: false,
+        // Windows-installed CLIs (e.g. `npm install -g`) commonly resolve to
+        // a `.cmd`/`.bat` shim, and Win32's CreateProcess — what execFile
+        // uses under shell:false — does not do PATHEXT resolution the way
+        // cmd.exe does, so shell:false here produces a plain ENOENT even
+        // when `claude` is genuinely installed and on PATH (reproduced: a
+        // real `claude.cmd` npm shim fails to spawn with shell:false).
+        // shell:true is required on Windows for that resolution to happen.
+        // This remains safe from injection: every argument here is a fixed
+        // literal (never user/repo-controlled), and Node quotes array
+        // arguments passed to a Windows shell rather than concatenating a
+        // raw string, unlike the original exec('claude plugin list --json').
+        shell: process.platform === 'win32',
       });
       const plugins: unknown = JSON.parse(stdout);
 
