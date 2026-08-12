@@ -18,4 +18,9 @@ export class PluginManager {
 
     return pluginStatus;
   }
+
+  /** Call after migration, plugin install/uninstall, or a manual refresh so the next status check re-queries the CLI. */
+  public invalidate(): void {
+    this.pluginDetector.invalidate();
+  }
 }

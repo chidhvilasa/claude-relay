@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 
 export class LegacyMigrator {
   private getSettingsPath(): string {
@@ -51,7 +52,12 @@ export class LegacyMigrator {
         settings.hooks = newHooks;
       }
 
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+      // Atomic write: settings.json is a shared file owned by the user (not
+      // just Relay), so a crash mid-write must never leave it truncated or
+      // corrupted. Write to a temp file in the same directory, then rename.
+      const tempPath = `${settingsPath}.tmp.${crypto.randomBytes(4).toString('hex')}`;
+      fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2), 'utf8');
+      fs.renameSync(tempPath, settingsPath);
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e.message };

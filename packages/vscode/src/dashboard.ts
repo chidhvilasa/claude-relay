@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { PluginManager } from './integration/plugin-manager';
+import { RelayService } from './relay-service';
 
 export class RelayDashboardProvider implements vscode.TreeDataProvider<DashboardItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<DashboardItem | undefined | void> = new vscode.EventEmitter<DashboardItem | undefined | void>();
@@ -21,15 +22,18 @@ export class RelayDashboardProvider implements vscode.TreeDataProvider<Dashboard
 
     const status = await this.pluginManager.getOverallStatus();
     let pluginDesc = 'Unknown';
-    let protectionDesc = 'Unavailable';
+    let protectionDesc = 'Not Verified';
     let legacyDesc = 'None';
 
     if (status === 'INSTALLED') {
       pluginDesc = 'Active';
       protectionDesc = 'Active';
+    } else if (status === 'INSTALLED_DISABLED') {
+      pluginDesc = 'Installed (Disabled)';
+      protectionDesc = 'Manual Mode';
     } else if (status === 'NOT_INSTALLED') {
       pluginDesc = 'Not Installed';
-      protectionDesc = 'Unavailable (Plugin not installed)';
+      protectionDesc = 'Manual Mode';
     } else if (status === 'LEGACY_INTEGRATION') {
       pluginDesc = 'Not Installed';
       protectionDesc = 'Active (Legacy)';
@@ -38,6 +42,36 @@ export class RelayDashboardProvider implements vscode.TreeDataProvider<Dashboard
       pluginDesc = 'Active';
       protectionDesc = 'Conflict (Both Active)';
       legacyDesc = 'Active (Conflict)';
+    } else if (status === 'UNKNOWN') {
+      pluginDesc = 'Unknown (Claude CLI unavailable)';
+      protectionDesc = 'Not Verified';
+    }
+
+    const folders = vscode.workspace.workspaceFolders;
+    let recoveryDesc: string;
+    let repositoryDesc: string;
+
+    if (!folders || folders.length === 0) {
+      recoveryDesc = 'No workspace open';
+      repositoryDesc = 'None';
+    } else if (folders.length > 1) {
+      recoveryDesc = `${folders.length} folders open — use "Claude Relay: ..." commands to pick one`;
+      repositoryDesc = `${folders.length} folders (multi-root)`;
+    } else {
+      repositoryDesc = folders[0].name;
+      try {
+        const service = new RelayService(folders[0].uri.fsPath);
+        const [checkpoint, handoff] = await Promise.all([service.getLatestCheckpoint(), service.getLatestHandoff()]);
+        const checkpointPart = checkpoint ? `Checkpoint: ${checkpoint.createdAt}` : 'Checkpoint: none';
+        let handoffPart = 'Handoff: none';
+        if (handoff) {
+          const freshness = await service.evaluateFreshness(handoff);
+          handoffPart = `Handoff: ${handoff.createdAt} (${freshness})`;
+        }
+        recoveryDesc = `${checkpointPart} | ${handoffPart}`;
+      } catch (e: any) {
+        recoveryDesc = `Recovery State: Invalid (${e.message})`;
+      }
     }
 
     return [
@@ -45,8 +79,8 @@ export class RelayDashboardProvider implements vscode.TreeDataProvider<Dashboard
       new DashboardItem('Claude Relay Plugin', pluginDesc, vscode.TreeItemCollapsibleState.None),
       new DashboardItem('Automatic protection', protectionDesc, vscode.TreeItemCollapsibleState.None),
       new DashboardItem('Legacy integration', legacyDesc, vscode.TreeItemCollapsibleState.None),
-      new DashboardItem('Recovery', 'Last checkpoint: unknown, Handoff: None', vscode.TreeItemCollapsibleState.None),
-      new DashboardItem('Repository', vscode.workspace.name || 'Unknown', vscode.TreeItemCollapsibleState.None)
+      new DashboardItem('Recovery', recoveryDesc, vscode.TreeItemCollapsibleState.None),
+      new DashboardItem('Repository', repositoryDesc, vscode.TreeItemCollapsibleState.None),
     ];
   }
 }
