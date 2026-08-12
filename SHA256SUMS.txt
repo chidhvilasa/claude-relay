@@ -1,1 +1,1 @@
-ca48465d1719fb7f018827f24bda4b9ca68513763142bc1ffd2bee60be87a57a  claude-relay-0.2.0.vsix
+cc883dd174f0d9120df5e1de1002e44fd34da5bea2d647da991d0b2fc2e7aa96  claude-relay-0.2.1.vsix
