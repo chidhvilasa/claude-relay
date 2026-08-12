@@ -3,16 +3,18 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { Checkpoint, CheckpointStore } from '../models/types';
 import { SchemaValidator } from '../schema/validator';
+import { ensureRelayGitignore } from './relay-dir';
 
 export class LocalCheckpointStore implements CheckpointStore {
   private readonly dir: string;
 
-  constructor(workspacePath: string) {
+  constructor(private readonly workspacePath: string) {
     this.dir = path.join(workspacePath, '.relay', 'checkpoints');
     this.init();
   }
 
   private init() {
+    ensureRelayGitignore(this.workspacePath);
     if (!fs.existsSync(this.dir)) {
       fs.mkdirSync(this.dir, { recursive: true });
     }

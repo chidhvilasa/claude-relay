@@ -3,18 +3,20 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { Handoff, HandoffStore } from '../models/types';
 import { SchemaValidator } from '../schema/validator';
+import { ensureRelayGitignore } from './relay-dir';
 
 export class LocalHandoffStore implements HandoffStore {
   private readonly dir: string;
   private readonly historyDir: string;
 
-  constructor(workspacePath: string) {
+  constructor(private readonly workspacePath: string) {
     this.dir = path.join(workspacePath, '.relay', 'handoffs');
     this.historyDir = path.join(workspacePath, '.relay', 'history');
     this.init();
   }
 
   private init() {
+    ensureRelayGitignore(this.workspacePath);
     if (!fs.existsSync(this.dir)) fs.mkdirSync(this.dir, { recursive: true });
     if (!fs.existsSync(this.historyDir)) fs.mkdirSync(this.historyDir, { recursive: true });
   }

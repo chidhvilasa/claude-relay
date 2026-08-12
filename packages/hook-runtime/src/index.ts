@@ -98,6 +98,19 @@ async function main() {
       fs.mkdirSync(checkpointsDir, { recursive: true });
     }
 
+    // Self-gitignore .relay/ so Relay's own writes never show up in `git
+    // status` — otherwise a freshly-written checkpoint changes the dirty-file
+    // count and can make StaleDetector immediately misreport POSSIBLY_STALE
+    // in any project that hasn't manually gitignored .relay/.
+    const gitignorePath = path.join(relayDir, '.gitignore');
+    if (!fs.existsSync(gitignorePath)) {
+      try {
+        fs.writeFileSync(gitignorePath, '*\n', 'utf-8');
+      } catch {
+        // best-effort; not fatal to checkpoint creation
+      }
+    }
+
     // Verify .relay directory didn't resolve to a symlink pointing outside!
     const realCheckpointsDir = fs.realpathSync(checkpointsDir);
     if (!realCheckpointsDir.startsWith(workspaceRoot)) {

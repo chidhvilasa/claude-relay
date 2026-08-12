@@ -105,6 +105,13 @@ async function main() {
     if (!fs.existsSync(checkpointsDir)) {
       fs.mkdirSync(checkpointsDir, { recursive: true });
     }
+    const gitignorePath = path.join(relayDir, ".gitignore");
+    if (!fs.existsSync(gitignorePath)) {
+      try {
+        fs.writeFileSync(gitignorePath, "*\n", "utf-8");
+      } catch {
+      }
+    }
     const realCheckpointsDir = fs.realpathSync(checkpointsDir);
     if (!realCheckpointsDir.startsWith(workspaceRoot)) {
       process.exit(0);
