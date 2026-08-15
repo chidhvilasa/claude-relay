@@ -1,9 +1,15 @@
-import { execFile } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
 
-const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
 const CLAUDE_CLI_TIMEOUT_MS = 5000;
 const MAX_STDOUT_BYTES = 2 * 1024 * 1024; // 2 MB
+
+// The exact, fully-literal command this module ever runs. No argument here
+// is ever built from user input, repo content, or anything else outside
+// this file, so there is nothing to inject — the same property the original
+// pre-hardening exec('claude plugin list --json') already had.
+const CLAUDE_PLUGIN_LIST_COMMAND = 'claude plugin list --json';
 
 export type ClaudePluginStatus = 
   | 'NOT_INSTALLED'
@@ -52,21 +58,27 @@ export class CLIPluginDetector implements ClaudePluginDetector {
 
   private async detectUncached(): Promise<ClaudePluginStatus> {
     try {
-      const { stdout } = await execFileAsync('claude', ['plugin', 'list', '--json'], {
+      // Deliberately exec() with a static string, not execFile() with an
+      // args array. Two things were tried and rejected first:
+      //   - execFile('claude', [...], { shell: false }): fails with ENOENT
+      //     on Windows for any `claude` installed via `npm install -g`,
+      //     which produces a `.cmd` shim — Win32 CreateProcess (what
+      //     execFile uses under shell:false) doesn't do PATHEXT resolution
+      //     the way a shell does. Reproduced directly.
+      //   - execFile('claude', [...], { shell: true }): "fixes" the above,
+      //     but Node's own DEP0190 warning flags array-args-with-shell:true
+      //     as unescaped/concatenated, not safely quoted — the opposite of
+      //     what an earlier version of this comment claimed. Node also
+      //     hard-rejects execFile('claude.cmd', [...], { shell: false })
+      //     with EINVAL (the CVE-2024-27980 mitigation), so there's no
+      //     shell:false path that reaches a .cmd shim at all.
+      // exec() with a single command string sidesteps all of it and is
+      // exactly as safe as before: CLAUDE_PLUGIN_LIST_COMMAND is a fixed
+      // literal, never built from user/repo input, so there is nothing to
+      // inject regardless of platform or shell.
+      const { stdout } = await execAsync(CLAUDE_PLUGIN_LIST_COMMAND, {
         timeout: CLAUDE_CLI_TIMEOUT_MS,
         maxBuffer: MAX_STDOUT_BYTES,
-        // Windows-installed CLIs (e.g. `npm install -g`) commonly resolve to
-        // a `.cmd`/`.bat` shim, and Win32's CreateProcess — what execFile
-        // uses under shell:false — does not do PATHEXT resolution the way
-        // cmd.exe does, so shell:false here produces a plain ENOENT even
-        // when `claude` is genuinely installed and on PATH (reproduced: a
-        // real `claude.cmd` npm shim fails to spawn with shell:false).
-        // shell:true is required on Windows for that resolution to happen.
-        // This remains safe from injection: every argument here is a fixed
-        // literal (never user/repo-controlled), and Node quotes array
-        // arguments passed to a Windows shell rather than concatenating a
-        // raw string, unlike the original exec('claude plugin list --json').
-        shell: process.platform === 'win32',
       });
       const plugins: unknown = JSON.parse(stdout);
 
