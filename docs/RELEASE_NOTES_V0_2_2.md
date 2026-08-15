@@ -152,7 +152,8 @@ No change this release. Still degraded as before; not re-verified live (see
 `docs/CURRENT_PLATFORM_COMPATIBILITY.md`).
 
 ## Candidate artifact
-`packages/vscode/claude-relay-0.2.2.vsix` — 16 files, 83,845 bytes. See the audit report for the current
-SHA-256; note that this VSIX is not byte-for-byte reproducible across builds (zip entry timestamps differ
-between packaging runs even with identical source), though the file list and size are stable — see
-`docs/GIT_HISTORY_RECONCILIATION.md`-adjacent notes in the audit report for that finding.
+`packages/vscode/claude-relay-0.2.2.vsix` — 15 files, 82,228 bytes, SHA-256
+`4504f00669bae86bb5a1c23046a99308d5237bef572b0e33ee41695f9cd8dec1` (from the final commit on this branch,
+`d8f6d18`). This VSIX is not byte-for-byte reproducible across builds (zip entry timestamps differ between
+packaging runs even with identical source), though the file list and size are stable across a rebuild from
+the same commit.
