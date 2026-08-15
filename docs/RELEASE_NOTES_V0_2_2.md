@@ -125,15 +125,25 @@ Unit 0→40; VS Code Host 2→4) and every one of the following was caught *by* 
 - `packages/vscode/src/test/suite/extension.test.ts` strengthened from checking 5 of 11 commands to all
   11, plus new checks that the dashboard view registers and activation doesn't throw
 
-## A note on Plugin versioning
+## Plugin versioning — resolved
 `plugins/claude-relay/runtime/hook-runner.cjs` — the actual compiled artifact the Claude Relay Plugin
-ships and runs — changed in this branch (the self-gitignore fix above is a real behavior change, not
-cosmetic). `plugins/claude-relay/.claude-plugin/plugin.json` was deliberately left at `0.2.0` per this
-task's instruction not to bump the plugin without a concrete defect. That instruction's own condition
-was met here, though: this **is** a real, if subtle, plugin defect (an inaccurate freshness signal), now
-fixed. Whether that alone justifies a plugin patch release, or whether it should be bundled with a future
-change, is left as a decision for the maintainer — flagged here rather than resolved unilaterally, since
-plugin releases go through a separate marketplace/tag process than the Companion.
+ships and runs — changed in this branch (the self-gitignore fix, a real behavior change fixing an
+inaccurate freshness signal, not cosmetic). An earlier revision of this document left `plugin.json` at
+`0.2.0` pending a decision; that's now resolved: **bumped to `0.2.1`**, with `marketplace.json`'s plugin
+entry updated to match (`claude plugin tag` validates the two must agree — confirmed via
+`claude plugin tag plugins/claude-relay --dry-run`, which resolves to tag `claude-relay--v0.2.1`).
+
+Separately, unrelated to anything else in this branch: `claude plugin validate .` failed against the
+currently installed Claude Code CLI (2.1.217) on the **existing, unmodified** `.claude-plugin/
+marketplace.json` — `plugins.0.repository: Invalid input: expected string, received object`. The live,
+published marketplace manifest has this exact object-shaped `repository` field, so `claude plugin
+marketplace add chidhvilasa/claude-relay` may already be failing for real users on a current CLI.
+Flattened `repository` to a plain URL string; both `plugin.json` and `marketplace.json` now pass
+`claude plugin validate --strict`.
+
+The plugin tag itself (`claude-relay--v0.2.1`) has **not** been created — `claude plugin tag` (without
+`--dry-run`) is left for after PR #1 merges and human live acceptance passes, consistent with not
+publishing v0.2.2 automatically either.
 
 ## Not verified in this release (requires a human driving VS Code / Claude Code interactively)
 Live testing through the actual Claude Code VS Code extension (`/plugins`, real `SessionStart`/
@@ -143,23 +153,24 @@ accessibility/screen-reader passes were not performed — they require a live, h
 this audit did not have. See the audit summary for the full list.
 
 ## Compatibility
-Compatible with: Claude Relay Plugin v0.2.0. See "A note on Plugin versioning" above — one real (if
-subtle) plugin-runtime defect was found and fixed in this branch; `plugin.json` was deliberately not
-bumped, pending a maintainer decision.
+Compatible with: Claude Relay Plugin v0.2.1 (bumped from v0.2.0 in this branch — see "Plugin versioning"
+above). The Companion also still works correctly against an unupgraded Plugin v0.2.0 install; nothing in
+the Companion assumes the plugin-side fix is present.
 
 ## Remote environments
 No change this release. Still degraded as before; not re-verified live (see
 `docs/CURRENT_PLATFORM_COMPATIBILITY.md`).
 
 ## Candidate artifact
-`packages/vscode/claude-relay-0.2.2.vsix` — 8 files, 71,991 bytes, SHA-256
-`ac55e3d2bbb478d0f5748aed568775b9654d729520059af4c5f1c146f04a5b86`.
+`packages/vscode/claude-relay-0.2.2.vsix` — 13 files, 75,514 bytes, SHA-256
+`d575f6216b0417f4431f533a3884e771fc64dcdd9344385b17e5c5e200a3fe3a`.
 
-Dropped from 15 to 8 files in the final pass: `tsc -p .` (used to build the extension-host test suite)
-emits per-file compiled output into `dist/` as a side effect — `dashboard.js`, `relay-service.js`,
-`workspace-resolver.js`, `integration/*.js`, and their `.map` files — none of which the extension actually
-loads at runtime (`main` is the single esbuild bundle `dist/extension.js`, which already contains all of
-that code). `.vscodeignore` now excludes everything under `dist/` except `extension.js` itself.
+Contents: the esbuild bundle (`dist/extension.js`), `LICENSE`, `README.md`, `package.json`, the
+Marketplace icon (`media/icon.png`), the Activity Bar icon (`media/relay-activity.svg`), and the 5
+Getting Started walkthrough step files (`media/walkthrough/*.md`). `tsc -p .`'s redundant per-file
+compiled output (`dashboard.js`, `relay-service.js`, etc. — never loaded at runtime, since `extension.js`
+already contains all of it via bundling) and `media/branding/`'s master brand assets (external-use only;
+nothing at runtime references them) are both excluded via `.vscodeignore`.
 
 This VSIX is not byte-for-byte reproducible across builds (zip entry timestamps differ between packaging
 runs even with identical source), though the file list and size are stable across a rebuild from the same

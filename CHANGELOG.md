@@ -1,6 +1,26 @@
 # Changelog
 
-## [0.2.2] - VS Code Companion only (Plugin remains 0.2.0)
+## [0.2.1] (plugin) — Claude Relay Plugin
+### Fixed
+- `.relay/` now self-gitignores in the hook-runtime writer (same fix as the Companion's storage layer,
+  duplicated inline since hook-runtime is intentionally zero-dependency) — fixes a false
+  `POSSIBLY_STALE` freshness signal immediately after any automatic checkpoint.
+- `.claude-plugin/marketplace.json`'s `repository` field was an object; the currently installed Claude
+  Code CLI's schema expects a string, so `claude plugin validate .` failed outright (not just in
+  `--strict` mode) on the previously-published manifest. Flattened to a URL string.
+
+Not yet tagged/published — `claude plugin tag plugins/claude-relay --dry-run` confirms tag
+`claude-relay--v0.2.1` is ready to create once VS Code Companion v0.2.2's PR merges and human live
+acceptance passes.
+
+## [0.2.2] - VS Code Companion
+### Added
+- Original logo and Activity Bar icon (`media/branding/`, `media/relay-activity.svg`) — replaces the
+  default Marketplace icon and a broken Activity Bar icon reference.
+- Native "Get Started with Claude Relay" walkthrough (5 steps, real commands, no custom webview).
+- `docs/HOW_CLAUDE_RELAY_WORKS.md`, `docs/SHARE_CLAUDE_RELAY.md`,
+  `docs/MARKETPLACE_SCREENSHOT_CHECKLIST.md`.
+
 ### Fixed (found by writing real automated tests, second pass)
 - `.relay/` now self-gitignores — writing a checkpoint/handoff no longer changes `git status`'s dirty-file
   count, which previously made a just-created handoff immediately report `POSSIBLY_STALE` in any project
