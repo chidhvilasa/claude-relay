@@ -152,8 +152,15 @@ No change this release. Still degraded as before; not re-verified live (see
 `docs/CURRENT_PLATFORM_COMPATIBILITY.md`).
 
 ## Candidate artifact
-`packages/vscode/claude-relay-0.2.2.vsix` — 15 files, 82,228 bytes, SHA-256
-`4504f00669bae86bb5a1c23046a99308d5237bef572b0e33ee41695f9cd8dec1` (from the final commit on this branch,
-`d8f6d18`). This VSIX is not byte-for-byte reproducible across builds (zip entry timestamps differ between
-packaging runs even with identical source), though the file list and size are stable across a rebuild from
-the same commit.
+`packages/vscode/claude-relay-0.2.2.vsix` — 8 files, 71,991 bytes, SHA-256
+`ac55e3d2bbb478d0f5748aed568775b9654d729520059af4c5f1c146f04a5b86`.
+
+Dropped from 15 to 8 files in the final pass: `tsc -p .` (used to build the extension-host test suite)
+emits per-file compiled output into `dist/` as a side effect — `dashboard.js`, `relay-service.js`,
+`workspace-resolver.js`, `integration/*.js`, and their `.map` files — none of which the extension actually
+loads at runtime (`main` is the single esbuild bundle `dist/extension.js`, which already contains all of
+that code). `.vscodeignore` now excludes everything under `dist/` except `extension.js` itself.
+
+This VSIX is not byte-for-byte reproducible across builds (zip entry timestamps differ between packaging
+runs even with identical source), though the file list and size are stable across a rebuild from the same
+commit.

@@ -1,8 +1,14 @@
 .vscode-test/**
 src/**
 tests/**
-dist/test/**
-dist/**/*.map
+# main ("./dist/extension.js") is a single esbuild bundle that already
+# contains everything under src/ (including dashboard.ts, relay-service.ts,
+# workspace-resolver.ts, integration/*) — nothing else in dist/ is ever
+# loaded at runtime. `tsc -p .` (used by the extension-host test build) also
+# emits per-file compiled output into dist/ as a side effect; without this,
+# those redundant, unused copies ship in the VSIX as dead weight.
+dist/**
+!dist/extension.js
 tsconfig.json
 tsconfig.typecheck.json
 .eslintrc.js
