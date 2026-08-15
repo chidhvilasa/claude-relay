@@ -1,6 +1,6 @@
 {
   "type": "SessionStart",
   "sessionId": "ses_1234567891",
-  "cwd": "c:\\Users\\chidh\\Downloads\\claude wake",
+  "cwd": "/path/to/your/project",
   "timestamp": "2026-08-11T20:55:00Z"
 }
