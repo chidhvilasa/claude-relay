@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <!--
+    Claude Relay activity-bar icon. Same mark as media/branding/claude-relay-logo.svg,
+    simplified to a single-color 24x24 glyph (no background tile, no gradients,
+    no decorative detail) so it renders correctly as a native VS Code Activity
+    Bar icon in Dark+, Light+, and High Contrast themes via currentColor.
+  -->
+  <circle cx="7" cy="7" r="2.6"/>
+  <path d="M9.1 9.1 C 12 9.8 13 13.5 14.6 15"/>
+  <path d="M17 13.6 L 19.8 16.4 L 17 19.2" stroke-width="1.8"/>
+  <circle cx="14.6" cy="15" r="1.6" fill="currentColor" stroke="none"/>
+</svg>

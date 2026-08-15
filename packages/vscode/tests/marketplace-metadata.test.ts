@@ -83,4 +83,23 @@ describe('Marketplace manifest', () => {
       expect(ignore).toContain(pattern);
     }
   });
+
+  it('every walkthrough step\'s markdown file exists and every completion-event command is registered', () => {
+    const walkthroughs = pkg.contributes?.walkthroughs ?? [];
+    expect(walkthroughs.length).toBeGreaterThan(0);
+    const commandIds = new Set((pkg.contributes?.commands ?? []).map((c: { command: string }) => c.command));
+
+    for (const wt of walkthroughs) {
+      expect(fs.existsSync(path.join(pkgDir, wt.icon))).toBe(true);
+      expect(wt.steps.length).toBeGreaterThan(0);
+      for (const step of wt.steps) {
+        expect(fs.existsSync(path.join(pkgDir, step.media.markdown))).toBe(true);
+        for (const event of step.completionEvents ?? []) {
+          if (event.startsWith('onCommand:')) {
+            expect(commandIds.has(event.slice('onCommand:'.length))).toBe(true);
+          }
+        }
+      }
+    }
+  });
 });

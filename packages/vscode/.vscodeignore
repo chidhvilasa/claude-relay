@@ -9,6 +9,10 @@ tests/**
 # those redundant, unused copies ship in the VSIX as dead weight.
 dist/**
 !dist/extension.js
+# Brand master assets (512/256px PNG, source SVG) are for external use
+# (GitHub, docs, press) — package.json's "icon" only ever references
+# media/icon.png directly, so nothing at runtime loads media/branding/.
+media/branding/**
 tsconfig.json
 tsconfig.typecheck.json
 .eslintrc.js

@@ -95,7 +95,7 @@
         {
           "id": "claudeRelay",
           "title": "Claude Relay",
-          "icon": "media/icon.svg"
+          "icon": "media/relay-activity.svg"
         }
       ]
     },
@@ -116,7 +116,51 @@
           "description": "Enable Claude Relay"
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "claudeRelayGettingStarted",
+        "title": "Get Started with Claude Relay",
+        "description": "Set up automatic protection, then try a real checkpoint and handoff.",
+        "icon": "media/icon.png",
+        "steps": [
+          {
+            "id": "installPlugin",
+            "title": "Install the Claude Relay Plugin",
+            "description": "",
+            "media": { "markdown": "media/walkthrough/01-install-plugin.md" }
+          },
+          {
+            "id": "verifyProtection",
+            "title": "Verify Protection",
+            "description": "",
+            "media": { "markdown": "media/walkthrough/02-verify-protection.md" },
+            "completionEvents": ["onCommand:claudeRelay.healthCheck"]
+          },
+          {
+            "id": "firstCheckpoint",
+            "title": "Create Your First Checkpoint",
+            "description": "",
+            "media": { "markdown": "media/walkthrough/03-first-checkpoint.md" },
+            "completionEvents": ["onCommand:claudeRelay.checkpoint"]
+          },
+          {
+            "id": "understandRecovery",
+            "title": "Understand Recovery",
+            "description": "",
+            "media": { "markdown": "media/walkthrough/04-understand-recovery.md" },
+            "completionEvents": ["onCommand:claudeRelay.handoff"]
+          },
+          {
+            "id": "openDashboard",
+            "title": "Open the Relay Dashboard",
+            "description": "",
+            "media": { "markdown": "media/walkthrough/05-open-dashboard.md" },
+            "completionEvents": ["onCommand:claudeRelay.openDashboard"]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "pnpm run build",
