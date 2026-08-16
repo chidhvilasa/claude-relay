@@ -1,0 +1,19 @@
+{
+  "name": "clauderelay-oss",
+  "owner": {
+    "name": "Claude Relay OSS",
+    "email": "open-source@clauderelay.oss"
+  },
+  "metadata": {
+    "description": "Official Claude Code plugins for Claude Relay",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "claude-relay",
+      "source": "./plugins/claude-relay",
+      "version": "0.2.1",
+      "repository": "https://github.com/chidhvilasa/claude-relay.git"
+    }
+  ]
+}

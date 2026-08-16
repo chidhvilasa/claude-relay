@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Claude Relay canonical logo — original mark, not derived from any
+    Anthropic/Claude/OpenAI/GitHub/VS Code branding.
+
+    Concept: a checkpoint (hollow ring, upper-left — state saved, pending
+    recovery) relays along a single curved path to a second checkpoint
+    (solid disc — state resolved), landing on a forward chevron (continuity/
+    progress). Canonical master; docs/MARKETPLACE_SCREENSHOT_CHECKLIST.md and
+    media/icon.png are rendered from this same geometry (see
+    docs/HOW_CLAUDE_RELAY_WORKS.md for the rendering note — this file has no
+    build-time SVG-to-PNG step; media/icon.png was rendered by
+    scripts-free System.Drawing (.NET, already present, no new dependency)
+    using matching coordinates; regenerate by hand if this file changes).
+  -->
+  <defs>
+    <clipPath id="crl-tile"><rect x="0" y="0" width="512" height="512" rx="112"/></clipPath>
+  </defs>
+  <g clip-path="url(#crl-tile)">
+    <rect x="0" y="0" width="512" height="512" fill="#31366B"/>
+  </g>
+  <g fill="none" stroke="#F3F1FF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="160" cy="160" r="48"/>
+    <path d="M193.6 193.6 C 250 210, 270 300, 316 340"/>
+    <path d="M380 344 L 424 378 L 380 412"/>
+  </g>
+  <circle cx="316" cy="340" r="34" fill="#F3F1FF"/>
+</svg>

@@ -1,11 +1,40 @@
 {
   "name": "claude-relay",
   "displayName": "Claude Relay",
-  "description": "Automatic session continuity for Claude Code.",
-  "version": "0.1.0",
+  "description": "Session continuity, recovery, checkpoints, and handoffs for Claude Code.",
+  "version": "0.2.2",
   "publisher": "clauderelay-oss",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chidhvilasa/claude-relay.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chidhvilasa/claude-relay/issues"
+  },
+  "homepage": "https://github.com/chidhvilasa/claude-relay#readme",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "keywords": [
+    "claude",
+    "claude code",
+    "claude relay",
+    "ai",
+    "coding assistant",
+    "developer tools",
+    "session continuity",
+    "context recovery",
+    "recovery",
+    "checkpoint",
+    "checkpoints",
+    "handoff",
+    "handoffs",
+    "session recovery",
+    "context",
+    "agent",
+    "git"
+  ],
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.74.0"
   },
   "categories": [
     "Other"
@@ -66,7 +95,7 @@
         {
           "id": "claudeRelay",
           "title": "Claude Relay",
-          "icon": "media/icon.svg"
+          "icon": "media/relay-activity.svg"
         }
       ]
     },
@@ -87,15 +116,64 @@
           "description": "Enable Claude Relay"
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "claudeRelayGettingStarted",
+        "title": "Get Started with Claude Relay",
+        "description": "Set up automatic protection, then try a real checkpoint and handoff.",
+        "icon": "media/icon.png",
+        "steps": [
+          {
+            "id": "installPlugin",
+            "title": "Install the Claude Relay Plugin",
+            "description": "",
+            "media": { "markdown": "media/walkthrough/01-install-plugin.md" }
+          },
+          {
+            "id": "verifyProtection",
+            "title": "Verify Protection",
+            "description": "",
+            "media": { "markdown": "media/walkthrough/02-verify-protection.md" },
+            "completionEvents": ["onCommand:claudeRelay.healthCheck"]
+          },
+          {
+            "id": "firstCheckpoint",
+            "title": "Create Your First Checkpoint",
+            "description": "",
+            "media": { "markdown": "media/walkthrough/03-first-checkpoint.md" },
+            "completionEvents": ["onCommand:claudeRelay.checkpoint"]
+          },
+          {
+            "id": "understandRecovery",
+            "title": "Understand Recovery",
+            "description": "",
+            "media": { "markdown": "media/walkthrough/04-understand-recovery.md" },
+            "completionEvents": ["onCommand:claudeRelay.handoff"]
+          },
+          {
+            "id": "openDashboard",
+            "title": "Open the Relay Dashboard",
+            "description": "",
+            "media": { "markdown": "media/walkthrough/05-open-dashboard.md" },
+            "completionEvents": ["onCommand:claudeRelay.openDashboard"]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "pnpm run build",
-    "build": "esbuild src/extension.ts --bundle --external:vscode --format=cjs --platform=node --outfile=dist/extension.js && esbuild ../core/src/claude/hook-runner-standalone.ts --bundle --platform=node --outfile=dist/hook-runner.cjs",
+    "prebuild": "pnpm --filter @claude-relay/core run build",
+    "build": "esbuild src/extension.ts --bundle --external:vscode --format=cjs --platform=node --outfile=dist/extension.js",
     "watch": "tsc -watch -p ./",
     "pretest": "pnpm run build",
-    "test": "tsc -p ./ && node dist/test/runTest.js",
+    "test": "pnpm run test:unit && tsc -p ./ && node dist/test/runTest.js",
+    "test:unit": "vitest run tests",
+    "test:host": "tsc -p ./ && node dist/test/runTest.js",
     "lint": "eslint src --ext ts",
+    "pretypecheck": "pnpm --filter @claude-relay/core run build",
+    "typecheck": "tsc --project tsconfig.typecheck.json",
     "package": "npx vsce package --no-dependencies"
   },
   "dependencies": {
@@ -104,8 +182,8 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
-    "@types/vscode": "^1.90.0",
-    "@vscode/test-electron": "^2.4.1",
+    "@types/vscode": "1.74.0",
+    "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.28.2",
     "glob": "^11.0.1",
     "mocha": "^11.1.0",

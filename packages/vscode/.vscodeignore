@@ -1,0 +1,21 @@
+.vscode-test/**
+src/**
+tests/**
+# main ("./dist/extension.js") is a single esbuild bundle that already
+# contains everything under src/ (including dashboard.ts, relay-service.ts,
+# workspace-resolver.ts, integration/*) — nothing else in dist/ is ever
+# loaded at runtime. `tsc -p .` (used by the extension-host test build) also
+# emits per-file compiled output into dist/ as a side effect; without this,
+# those redundant, unused copies ship in the VSIX as dead weight.
+dist/**
+!dist/extension.js
+# Brand master assets (512/256px PNG, source SVG) are for external use
+# (GitHub, docs, press) — package.json's "icon" only ever references
+# media/icon.png directly, so nothing at runtime loads media/branding/.
+media/branding/**
+tsconfig.json
+tsconfig.typecheck.json
+.eslintrc.js
+.gitignore
+*.vsix
+**/*.vsix

@@ -1,13 +1,13 @@
 {
   "name": "@claude-relay/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "lint": "eslint src/",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "dependencies": {
     "ajv": "^8.20.0",
