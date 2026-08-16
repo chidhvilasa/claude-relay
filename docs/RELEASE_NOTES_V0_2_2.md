@@ -8,6 +8,9 @@ This release was produced by a source-level audit (not a pure metadata patch lik
 correction in `docs/RELEASE_NOTES_V0_2_1.md`). Every item below was verified against a diff, a passing
 test, or a reproduced failure; nothing here is aspirational.
 
+**Install from the VS Code Marketplace:** https://marketplace.visualstudio.com/items?itemName=clauderelay-oss.claude-relay
+(the VSIX attached below is the manual/offline fallback — same file, same hash, either way).
+
 ## Fixed — functionality
 The manual commands were UI stubs that showed a success message without doing anything, while
 `@claude-relay/core` already had working, tested checkpoint/handoff/resume logic that was simply never

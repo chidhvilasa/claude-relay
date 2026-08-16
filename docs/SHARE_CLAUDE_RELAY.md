@@ -7,7 +7,10 @@ Copy-pasteable information for recommending Claude Relay to another developer.
 **One-liner:** Session continuity, recovery, checkpoints, and handoffs for Claude Code.
 
 **Install (VS Code):**
-Search `Claude Relay` in the Extensions view, or install directly:
+Search `Claude Relay` in the Extensions view, or use the direct page:
+https://marketplace.visualstudio.com/items?itemName=clauderelay-oss.claude-relay
+
+Or install by exact ID (useful if search hasn't indexed it yet):
 ```
 code --install-extension clauderelay-oss.claude-relay
 ```

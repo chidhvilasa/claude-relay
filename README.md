@@ -33,20 +33,31 @@ Claude Code Session
 **Claude Relay Plugin** — automatic lifecycle protection (`SessionStart`/`PreCompact`/`StopFailure`).
 **Claude Relay (VS Code)** — dashboard, recovery history, manual checkpoint/handoff, diagnostics.
 
-### Claude Plugin only
-For Claude Code terminal/IDE users who want automatic continuity without the VS Code dashboard:
+**1. VS Code:** search **Claude Relay** in the Extensions view (publisher `clauderelay-oss`) and install,
+or use the [Marketplace page](https://marketplace.visualstudio.com/items?itemName=clauderelay-oss.claude-relay)
+directly. If search hasn't picked it up yet, install by exact ID as a fallback:
+```bash
+code --install-extension clauderelay-oss.claude-relay
+```
 
+**2. Claude Plugin:**
 ```bash
 claude plugin marketplace add chidhvilasa/claude-relay
 claude plugin install claude-relay@clauderelay-oss
 ```
 
+Then open the **Claude Relay** view in the Activity Bar and run **Health Check**.
+
+### Claude Plugin only
+For Claude Code terminal/IDE users who want automatic continuity without the VS Code dashboard, just
+step 2 above.
+
 ### VS Code Companion only
 Manual checkpoint/handoff/resume, still works. Automatic protection between sessions requires the plugin.
-Search **Claude Relay** in the Extensions view, or:
-```bash
-code --install-extension clauderelay-oss.claude-relay
-```
+Just step 1 above.
+
+A VSIX is also attached to each [GitHub Release](https://github.com/chidhvilasa/claude-relay/releases) as
+a manual/offline fallback — the Marketplace install above is the normal path.
 
 ## Security
 - **No auth**: Claude Relay handles zero authentication and has no access to Claude credentials.

@@ -24,6 +24,10 @@ claude plugin install claude-relay@clauderelay-oss
 
 The Companion works without step 1, but automatic protection between sessions requires the plugin.
 
+*First-time install from a new publisher?* VS Code may ask you to confirm you trust the publisher
+`clauderelay-oss` — that's normal platform behavior for any extension you haven't installed before, not
+something specific to Claude Relay.
+
 ## What you get
 
 - **Protection** — is this project currently protected, and by what (plugin vs. manual)?
