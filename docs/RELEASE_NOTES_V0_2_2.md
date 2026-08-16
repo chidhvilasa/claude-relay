@@ -1,6 +1,8 @@
 # Claude Relay VS Code Companion v0.2.2
 
-Patch release. Claude Relay Plugin stays at `0.2.0` — no plugin defect was found, so it was not bumped.
+Patch release. Claude Relay Plugin is bumped alongside it, to `0.2.1` (tag `claude-relay--v0.2.1`) — a
+real, if subtle, plugin-runtime defect was found and fixed (see "Plugin versioning — resolved" below),
+so unlike this doc's earlier draft said, it *was* bumped.
 
 This release was produced by a source-level audit (not a pure metadata patch like v0.2.1 — see the
 correction in `docs/RELEASE_NOTES_V0_2_1.md`). Every item below was verified against a diff, a passing
