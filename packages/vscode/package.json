@@ -2,7 +2,7 @@
   "name": "claude-relay",
   "displayName": "Claude Relay",
   "description": "Session continuity, recovery, checkpoints, and handoffs for Claude Code.",
-  "version": "0.2.2",
+  "version": "0.3.0-dev",
   "publisher": "clauderelay-oss",
   "repository": {
     "type": "git",
@@ -88,6 +88,18 @@
       {
         "command": "claudeRelay.showLogs",
         "title": "Claude Relay: Show Logs"
+      },
+      {
+        "command": "claudeRelay.enableAutomaticWake",
+        "title": "Claude Relay: Enable Automatic Wake"
+      },
+      {
+        "command": "claudeRelay.disableAutomaticWake",
+        "title": "Claude Relay: Disable Automatic Wake"
+      },
+      {
+        "command": "claudeRelay.showWakeDiagnostics",
+        "title": "Claude Relay: Show Wake Diagnostics"
       }
     ],
     "viewsContainers": {

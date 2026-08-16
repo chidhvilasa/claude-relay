@@ -12,7 +12,7 @@
     {
       "name": "claude-relay",
       "source": "./plugins/claude-relay",
-      "version": "0.2.1",
+      "version": "0.3.0-dev",
       "repository": "https://github.com/chidhvilasa/claude-relay.git"
     }
   ]

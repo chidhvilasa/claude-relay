@@ -6,6 +6,7 @@ export * from './state/stale-detector';
 export * from './storage/checkpoint-store';
 export * from './storage/handoff-store';
 export * from './storage/relay-dir';
+export * from './wake/wake-config';
 export * from './resume/reconciler';
 export * from './usage/providers';
 export * from './handoff/wakeup-generator';

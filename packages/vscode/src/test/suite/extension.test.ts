@@ -13,6 +13,9 @@ const DECLARED_COMMANDS = [
   'claudeRelay.reinstallClaudeIntegration',
   'claudeRelay.removeClaudeIntegration',
   'claudeRelay.showLogs',
+  'claudeRelay.enableAutomaticWake',
+  'claudeRelay.disableAutomaticWake',
+  'claudeRelay.showWakeDiagnostics',
 ];
 
 suite('Extension Test Suite', () => {

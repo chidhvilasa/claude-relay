@@ -4,6 +4,7 @@ import { PluginManager } from './integration/plugin-manager';
 import { LegacyMigrator } from './integration/legacy-migrator';
 import { RelayService } from './relay-service';
 import { resolveTargetFolder } from './workspace-resolver';
+import { AutomaticWakeConfigManager, WakeScope, WakeWriteResult } from '@claude-relay/core';
 
 const INSTALL_INSTRUCTIONS =
   'claude plugin marketplace add chidhvilasa/claude-relay\nclaude plugin install claude-relay@clauderelay-oss';
@@ -17,6 +18,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const pluginManager = new PluginManager();
   const migrator = new LegacyMigrator();
+  const wakeManager = new AutomaticWakeConfigManager();
 
   // A RelayService is created per-command against the folder the user picks
   // (or the sole folder, if unambiguous) rather than cached once at
@@ -85,6 +87,19 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  function describeWakeStatus(folder: vscode.WorkspaceFolder | undefined): string {
+    const userStatus = wakeManager.getStatus('user');
+    const workspaceStatus = folder ? wakeManager.getStatus('workspace', folder.uri.fsPath) : { configured: false, values: {} };
+    if (!userStatus.configured && !workspaceStatus.configured) return 'Automatic Wake: Off';
+    const scope = workspaceStatus.configured ? 'this workspace' : 'all workspaces';
+    // "configured" only means the env keys are written to a settings file —
+    // it does not prove the currently running Claude Code process actually
+    // reads them the way docs/AUTOMATIC_WAKE_OFFICIAL_CAPABILITIES.md
+    // describes (that mechanism is undocumented and version-dependent).
+    // Health Check must not claim more certainty than that.
+    return `Automatic Wake: Configured (${scope}, Level 1 only — undocumented mechanism, not independently verified as active in the current session)`;
+  }
+
   const healthCheckCmd = vscode.commands.registerCommand('claudeRelay.healthCheck', async () => {
     pluginManager.invalidate();
     const currentStatus = await pluginManager.getOverallStatus();
@@ -103,8 +118,86 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     }
 
-    vscode.window.showInformationMessage(`Claude Relay — Plugin: ${currentStatus} | ${recoveryLine}`);
+    const wakeLine = describeWakeStatus(folder);
+    log(`Health check: ${wakeLine}`);
+    vscode.window.showInformationMessage(`Claude Relay — Plugin: ${currentStatus} | ${recoveryLine} | ${wakeLine}`);
     dashboardProvider.refresh();
+  });
+
+  const enableWakeCmd = vscode.commands.registerCommand('claudeRelay.enableAutomaticWake', async () => {
+    const folder = await resolveTargetFolder();
+    const choices: Array<{ label: string; scope: WakeScope | null }> = [
+      { label: 'This Workspace', scope: 'workspace' },
+      { label: 'All Workspaces (user-wide)', scope: 'user' },
+      { label: 'Cancel', scope: null },
+    ];
+    if (!folder) choices.splice(0, 1); // no workspace open -> can't scope to "this workspace"
+
+    const pick = await vscode.window.showQuickPick(
+      choices.map(c => c.label),
+      {
+        placeHolder: 'Enable Automatic Wake for…',
+        title: 'Automatic Wake allows an interrupted Claude task to continue after usage becomes ' +
+          'available again. Claude Code\'s normal permission rules remain active — Relay never enables ' +
+          'bypassPermissions. This relies on an undocumented Claude Code mechanism (see ' +
+          'docs/AUTOMATIC_WAKE_OFFICIAL_CAPABILITIES.md); Level 1 only (same live process).',
+      }
+    );
+    const choice = choices.find(c => c.label === pick);
+    if (!choice || !choice.scope) return;
+
+    const result = wakeManager.enable(choice.scope, folder?.uri.fsPath);
+    log(`Automatic Wake enable (${choice.scope}): ${result.success ? 'success' : result.error}`);
+    if (result.success) {
+      vscode.window.showInformationMessage(`Claude Relay: Automatic Wake enabled (${choice.label}).`);
+    } else {
+      vscode.window.showErrorMessage(`Claude Relay: Failed to enable Automatic Wake — ${result.error}`);
+    }
+  });
+
+  const disableWakeCmd = vscode.commands.registerCommand('claudeRelay.disableAutomaticWake', async () => {
+    const folder = await resolveTargetFolder();
+    const choices: Array<{ label: string; scope: WakeScope | null }> = [
+      { label: 'This Workspace', scope: 'workspace' },
+      { label: 'All Workspaces (user-wide)', scope: 'user' },
+      { label: 'Both', scope: null },
+      { label: 'Cancel', scope: undefined as unknown as null },
+    ];
+    if (!folder) choices.splice(0, 1);
+
+    const pick = await vscode.window.showQuickPick(choices.map(c => c.label), { placeHolder: 'Disable Automatic Wake for…' });
+    if (pick === undefined || pick === 'Cancel') return;
+
+    const results: WakeWriteResult[] = [];
+    if (pick === 'Both') {
+      if (folder) results.push(wakeManager.disable('workspace', folder.uri.fsPath));
+      results.push(wakeManager.disable('user'));
+    } else {
+      const choice = choices.find(c => c.label === pick);
+      if (choice?.scope) results.push(wakeManager.disable(choice.scope, folder?.uri.fsPath));
+    }
+
+    const failed = results.find(r => !r.success);
+    log(`Automatic Wake disable: ${failed ? failed.error : 'success'}`);
+    if (failed) {
+      vscode.window.showErrorMessage(`Claude Relay: Failed to disable Automatic Wake — ${failed.error}`);
+    } else {
+      vscode.window.showInformationMessage('Claude Relay: Automatic Wake disabled.');
+    }
+  });
+
+  const showWakeDiagnosticsCmd = vscode.commands.registerCommand('claudeRelay.showWakeDiagnostics', async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    outputChannel.appendLine('--- Automatic Wake Diagnostics ---');
+    outputChannel.appendLine(describeWakeStatus(folder));
+    const userStatus = wakeManager.getStatus('user');
+    outputChannel.appendLine(`User scope configured: ${userStatus.configured}`);
+    if (folder) {
+      const wsStatus = wakeManager.getStatus('workspace', folder.uri.fsPath);
+      outputChannel.appendLine(`Workspace scope configured: ${wsStatus.configured}`);
+    }
+    outputChannel.appendLine('See docs/AUTOMATIC_WAKE_OFFICIAL_CAPABILITIES.md for what these settings do and their limits.');
+    outputChannel.show();
   });
 
   const checkpointCmd = vscode.commands.registerCommand('claudeRelay.checkpoint', async () => {
@@ -258,6 +351,7 @@ export async function activate(context: vscode.ExtensionContext) {
     setupCmd, healthCheckCmd, checkpointCmd, handoffCmd, resumeCmd,
     openLatestHandoffCmd, openDashboardCmd, clearResolvedHandoffCmd,
     reinstallClaudeIntegrationCmd, removeClaudeIntegrationCmd, showLogsCmd,
+    enableWakeCmd, disableWakeCmd, showWakeDiagnosticsCmd,
     statusBarItem, outputChannel
   );
 
