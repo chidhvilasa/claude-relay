@@ -95,6 +95,47 @@ describe('hook-runner: valid input', () => {
   });
 });
 
+describe('hook-runner: wake observability (research instrumentation, not automation)', () => {
+  it('StopFailure appends an allowlisted-field observation to .relay/wake-observations.jsonl', () => {
+    const repo = newRepoDir('wake-observation');
+    initRepo(repo);
+    const result = runHook(makePayload('StopFailure', repo, { error: 'rate_limit', sessionId: 'ses_abc123' }));
+    expect(result.status).toBe(0);
+    const obsPath = path.join(repo, '.relay', 'wake-observations.jsonl');
+    expect(fs.existsSync(obsPath)).toBe(true);
+    const lines = fs.readFileSync(obsPath, 'utf-8').trim().split('\n');
+    expect(lines).toHaveLength(1);
+    const obs = JSON.parse(lines[0]);
+    expect(obs.eventType).toBe('StopFailure');
+    expect(obs.sessionId).toBe('ses_abc123');
+    expect(obs.context.error).toBe('rate_limit');
+    // Checkpoint creation is unaffected by this instrumentation.
+    expect(checkpointFiles(repo)).toHaveLength(1);
+  });
+
+  it('does not append an observation for SessionStart or PreCompact', () => {
+    const repo = newRepoDir('wake-observation-scoped');
+    initRepo(repo);
+    runHook(makePayload('SessionStart', repo));
+    runHook(makePayload('PreCompact', repo));
+    expect(fs.existsSync(path.join(repo, '.relay', 'wake-observations.jsonl'))).toBe(false);
+  });
+
+  it('only captures known-safe allowlisted fields, never the raw payload', () => {
+    const repo = newRepoDir('wake-observation-allowlist');
+    initRepo(repo);
+    runHook(makePayload('StopFailure', repo, {
+      error: 'billing_error',
+      apiKey: 'sk-ant-should-never-be-captured',
+      authorization: 'Bearer should-never-be-captured',
+    }));
+    const obsPath = path.join(repo, '.relay', 'wake-observations.jsonl');
+    const obs = JSON.parse(fs.readFileSync(obsPath, 'utf-8').trim());
+    expect(obs.context.error).toBe('billing_error');
+    expect(JSON.stringify(obs)).not.toContain('should-never-be-captured');
+  });
+});
+
 describe('hook-runner: malformed/hostile input degrades safely', () => {
   it('malformed JSON exits 0 and writes nothing', () => {
     const repo = newRepoDir('malformed-json');

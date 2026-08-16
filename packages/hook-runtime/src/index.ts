@@ -98,6 +98,42 @@ async function main() {
       fs.mkdirSync(checkpointsDir, { recursive: true });
     }
 
+    // Research instrumentation only — not a user-facing feature, and not the
+    // basis of any automatic-continuation behavior yet. See
+    // docs/AUTOMATIC_WAKE_ARCHITECTURE.md: it is currently unconfirmed
+    // whether StopFailure fires at all when a plan-level usage/session limit
+    // blocks a session (as opposed to a transient per-request rate limit),
+    // and if it does, what its error-classification field is actually
+    // called. This appends a small, allowlisted, local-only observation the
+    // next time StopFailure fires for real, so that question can be
+    // answered from real data instead of guessed at. It changes no
+    // behavior — checkpoint creation above is identical either way.
+    if (eventType === 'StopFailure') {
+      try {
+        const candidateFields = ['error', 'error_type', 'errorType', 'reason', 'matcher', 'subtype'];
+        const observedContext: Record<string, string> = {};
+        for (const field of candidateFields) {
+          const value = (eventPayload as Record<string, unknown>)[field];
+          if (typeof value === 'string' && value.length > 0 && value.length <= 128) {
+            observedContext[field] = value;
+          }
+        }
+        const observation = {
+          observedAt: new Date().toISOString(),
+          eventType,
+          sessionId: typeof eventPayload.sessionId === 'string' ? eventPayload.sessionId.slice(0, 128) : undefined,
+          context: observedContext,
+        };
+        const obsPath = path.join(relayDir, 'wake-observations.jsonl');
+        const existingSize = fs.existsSync(obsPath) ? fs.statSync(obsPath).size : 0;
+        if (existingSize < 2 * 1024 * 1024) { // 2 MB cap; stop appending past that rather than growing unbounded
+          fs.appendFileSync(obsPath, JSON.stringify(observation) + '\n', 'utf-8');
+        }
+      } catch {
+        // best-effort; never fatal to checkpoint creation
+      }
+    }
+
     // Self-gitignore .relay/ so Relay's own writes never show up in `git
     // status` — otherwise a freshly-written checkpoint changes the dirty-file
     // count and can make StaleDetector immediately misreport POSSIBLY_STALE

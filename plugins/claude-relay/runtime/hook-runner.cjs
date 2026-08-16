@@ -105,6 +105,30 @@ async function main() {
     if (!fs.existsSync(checkpointsDir)) {
       fs.mkdirSync(checkpointsDir, { recursive: true });
     }
+    if (eventType === "StopFailure") {
+      try {
+        const candidateFields = ["error", "error_type", "errorType", "reason", "matcher", "subtype"];
+        const observedContext = {};
+        for (const field of candidateFields) {
+          const value = eventPayload[field];
+          if (typeof value === "string" && value.length > 0 && value.length <= 128) {
+            observedContext[field] = value;
+          }
+        }
+        const observation = {
+          observedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          eventType,
+          sessionId: typeof eventPayload.sessionId === "string" ? eventPayload.sessionId.slice(0, 128) : void 0,
+          context: observedContext
+        };
+        const obsPath = path.join(relayDir, "wake-observations.jsonl");
+        const existingSize = fs.existsSync(obsPath) ? fs.statSync(obsPath).size : 0;
+        if (existingSize < 2 * 1024 * 1024) {
+          fs.appendFileSync(obsPath, JSON.stringify(observation) + "\n", "utf-8");
+        }
+      } catch {
+      }
+    }
     const gitignorePath = path.join(relayDir, ".gitignore");
     if (!fs.existsSync(gitignorePath)) {
       try {
