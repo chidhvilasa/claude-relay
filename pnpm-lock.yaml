@@ -82,6 +82,9 @@ importers:
       '@claude-relay/core':
         specifier: workspace:*
         version: link:../core
+      '@claude-relay/wake-runtime':
+        specifier: workspace:*
+        version: link:../wake-runtime
     devDependencies:
       '@types/mocha':
         specifier: ^10.0.10

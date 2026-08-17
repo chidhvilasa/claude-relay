@@ -4,7 +4,8 @@ import { PluginManager } from './integration/plugin-manager';
 import { LegacyMigrator } from './integration/legacy-migrator';
 import { RelayService } from './relay-service';
 import { resolveTargetFolder } from './workspace-resolver';
-import { AutomaticWakeConfigManager, WakeScope, WakeWriteResult } from '@claude-relay/core';
+import { AutomaticWakeConfigManager, WakeScope, WakeWriteResult, WakeStateStore, WakeRecord } from '@claude-relay/core';
+import { WakeController, defaultGetGitDir, realGitSnapshot } from '@claude-relay/wake-runtime';
 
 const INSTALL_INSTRUCTIONS =
   'claude plugin marketplace add chidhvilasa/claude-relay\nclaude plugin install claude-relay@clauderelay-oss';
@@ -200,6 +201,118 @@ export async function activate(context: vscode.ExtensionContext) {
     outputChannel.show();
   });
 
+  // Any wake record not already at a true terminal state (COMPLETED/CANCELLED)
+  // is something a user could meaningfully act on — armed and waiting,
+  // blocked on something, expired, or failed.
+  const PENDING_WAKE_STATES: WakeRecord['state'][] = [
+    'IDLE', 'ARMED', 'WAITING_NATIVE', 'FALLBACK_STARTING', 'FALLBACK_RUNNING', 'RESUMING',
+    'BLOCKED_STALE', 'BLOCKED_DIVERGED', 'BLOCKED_PERMISSION', 'BLOCKED_USER_INPUT', 'BLOCKED_AUTH',
+    'FAILED_SESSION_NOT_FOUND', 'EXPIRED', 'RECOVERY_AVAILABLE', 'FAILED',
+  ];
+
+  function listPendingWakeRecords(folder: vscode.WorkspaceFolder): WakeRecord[] {
+    const store = new WakeStateStore(folder.uri.fsPath);
+    return store.list().filter(r => PENDING_WAKE_STATES.includes(r.state) && r.state !== 'IDLE');
+  }
+
+  function shortSessionId(sessionId: string): string {
+    // Never show the raw session id by default in UI surfaces (Part 40) —
+    // diagnostics/output-channel logging still use the full id where needed.
+    return sessionId.length <= 12 ? sessionId : `${sessionId.slice(0, 4)}…${sessionId.slice(-4)}`;
+  }
+
+  async function pickPendingWakeRecord(folder: vscode.WorkspaceFolder, placeHolder: string): Promise<WakeRecord | undefined> {
+    const records = listPendingWakeRecords(folder);
+    if (records.length === 0) {
+      vscode.window.showInformationMessage('Claude Relay: No pending Automatic Wake sessions for this workspace.');
+      return undefined;
+    }
+    if (records.length === 1) return records[0];
+    const pick = await vscode.window.showQuickPick(
+      records.map(r => ({ label: `${shortSessionId(r.sessionId)} — ${r.state}`, description: r.reason, record: r })),
+      { placeHolder }
+    );
+    return pick?.record;
+  }
+
+  const cancelPendingWakeCmd = vscode.commands.registerCommand('claudeRelay.cancelPendingWake', async () => {
+    const folder = await resolveTargetFolder();
+    if (!folder) return;
+    const record = await pickPendingWakeRecord(folder, 'Cancel which pending wake?');
+    if (!record) return;
+
+    const store = new WakeStateStore(folder.uri.fsPath);
+    try {
+      // FAILED's only legal exit is RECOVERY_AVAILABLE (not directly
+      // CANCELLED) — every other pending state can reach CANCELLED in one
+      // hop. Preserves the state-machine's own legality checks rather than
+      // bypassing them from the UI layer.
+      let current = record;
+      if (current.state === 'FAILED') {
+        current = store.transition(current.sessionId, 'RECOVERY_AVAILABLE');
+      }
+      store.transition(current.sessionId, 'CANCELLED');
+      log(`Cancelled pending wake for session ${record.sessionId} (was ${record.state})`);
+      vscode.window.showInformationMessage(`Claude Relay: Cancelled pending wake for ${shortSessionId(record.sessionId)}. Checkpoints and handoffs are untouched.`);
+    } catch (e: any) {
+      log(`Cancel pending wake failed: ${e.message}`);
+      vscode.window.showErrorMessage(`Claude Relay: Could not cancel — ${e.message}`);
+    }
+  });
+
+  const resumePendingSessionCmd = vscode.commands.registerCommand('claudeRelay.resumePendingSession', async () => {
+    const folder = await resolveTargetFolder();
+    if (!folder) return;
+    const record = await pickPendingWakeRecord(folder, 'Resume which pending session?');
+    if (!record) return;
+
+    const store = new WakeStateStore(folder.uri.fsPath);
+
+    // A blocked/expired/failed record needs re-arming before WakeController
+    // will act on it at all — it only proceeds from ARMED/WAITING_NATIVE.
+    // This is the explicit, attended, user-confirmed path (Part 34); the
+    // confirmation dialog below is the "require confirmation if stale" /
+    // "refuse unsafe/diverged" gate — WakeController's own repo-safety check
+    // is still the authoritative one that actually runs the fallback.
+    const confirm = await vscode.window.showWarningMessage(
+      `Resume ${shortSessionId(record.sessionId)} now? Current state: ${record.state}${record.reason ? ` (${record.reason})` : ''}. ` +
+      'Claude Relay will reconcile the repository before continuing, and will refuse if the repository has diverged.',
+      { modal: true }, 'Resume Now'
+    );
+    if (confirm !== 'Resume Now') return;
+
+    try {
+      let current = record;
+      if (['BLOCKED_STALE', 'BLOCKED_DIVERGED', 'BLOCKED_PERMISSION', 'BLOCKED_USER_INPUT', 'BLOCKED_AUTH', 'FAILED_SESSION_NOT_FOUND', 'EXPIRED', 'FAILED'].includes(current.state)) {
+        current = store.transition(current.sessionId, 'RECOVERY_AVAILABLE');
+      }
+      if (current.state === 'RECOVERY_AVAILABLE') {
+        current = store.transition(current.sessionId, 'ARMED', {
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1h — a manual, attended resume doesn't need the long unattended default
+        });
+      }
+
+      vscode.window.showInformationMessage(`Claude Relay: Resuming ${shortSessionId(record.sessionId)}…`);
+      const controller = new WakeController(folder.uri.fsPath, { getCurrentGit: realGitSnapshot, getGitDir: defaultGetGitDir });
+      const outcome = await controller.run(record.sessionId);
+      log(`Manual resume for ${record.sessionId}: ${JSON.stringify(outcome)}`);
+
+      if (outcome.action === 'ran' && outcome.state === 'COMPLETED') {
+        vscode.window.showInformationMessage(`Claude Relay: ${shortSessionId(record.sessionId)} resumed successfully.`);
+      } else if (outcome.action === 'blocked') {
+        vscode.window.showWarningMessage(`Claude Relay: Resume blocked — ${outcome.state}. ${outcome.reason}`);
+      } else if (outcome.action === 'ran') {
+        vscode.window.showWarningMessage(`Claude Relay: Resume ended in ${outcome.state}. ${outcome.detail}`);
+      } else {
+        vscode.window.showInformationMessage(`Claude Relay: ${outcome.reason}`);
+      }
+      dashboardProvider.refresh();
+    } catch (e: any) {
+      log(`Resume pending session failed: ${e.message}`);
+      vscode.window.showErrorMessage(`Claude Relay: Resume failed — ${e.message}`);
+    }
+  });
+
   const checkpointCmd = vscode.commands.registerCommand('claudeRelay.checkpoint', async () => {
     const service = await getService();
     if (!service) return;
@@ -351,7 +464,7 @@ export async function activate(context: vscode.ExtensionContext) {
     setupCmd, healthCheckCmd, checkpointCmd, handoffCmd, resumeCmd,
     openLatestHandoffCmd, openDashboardCmd, clearResolvedHandoffCmd,
     reinstallClaudeIntegrationCmd, removeClaudeIntegrationCmd, showLogsCmd,
-    enableWakeCmd, disableWakeCmd, showWakeDiagnosticsCmd,
+    enableWakeCmd, disableWakeCmd, showWakeDiagnosticsCmd, cancelPendingWakeCmd, resumePendingSessionCmd,
     statusBarItem, outputChannel
   );
 
@@ -365,6 +478,43 @@ export async function activate(context: vscode.ExtensionContext) {
   // however long that check took — caught by the extension-host test
   // suite, not assumed.)
   checkStartupStatus().catch(e => log(`Startup status check failed: ${e.message}`));
+
+  // Level 3 (Part 27): on activation — including a fresh VS Code window
+  // after a full close/reopen, which is exactly what "the process died"
+  // looks like from Relay's side — check for pending Automatic Wake records
+  // per open workspace folder. Read-only: this only classifies and logs
+  // what it finds (expired records get moved to a non-actionable terminal
+  // state so a stale record isn't silently treated as still-live); it does
+  // NOT re-arm, does NOT spawn a fallback, and does NOT reopen anything
+  // automatically — no VS Code session URI is invoked from here. Wiring an
+  // actual automatic continuation into this activation path is explicitly
+  // NOT done this pass; see the final report. Deliberately not awaited, for
+  // the same reason as checkStartupStatus above — never delay command
+  // registration on filesystem/state work.
+  void (async () => {
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      try {
+        const store = new WakeStateStore(folder.uri.fsPath);
+        const pending = store.list().filter(r => r.state !== 'IDLE' && r.state !== 'COMPLETED' && r.state !== 'CANCELLED');
+        for (const record of pending) {
+          if (record.state !== 'EXPIRED' && new Date(record.expiresAt).getTime() <= Date.now()) {
+            try {
+              store.transition(record.sessionId, 'EXPIRED');
+              log(`Wake record for session ${record.sessionId} in ${folder.name} expired since last activation.`);
+            } catch {
+              // best-effort; an already-invalid transition here isn't fatal to activation
+            }
+          }
+        }
+        const stillActionable = store.list().filter(r => ['ARMED', 'WAITING_NATIVE', 'RECOVERY_AVAILABLE', 'BLOCKED_STALE', 'BLOCKED_DIVERGED', 'BLOCKED_PERMISSION', 'BLOCKED_USER_INPUT', 'BLOCKED_AUTH'].includes(r.state));
+        if (stillActionable.length > 0) {
+          log(`${stillActionable.length} pending Automatic Wake session(s) found for ${folder.name} on activation. Use "Claude Relay: Resume Pending Session" or "Claude Relay: Show Wake Diagnostics".`);
+        }
+      } catch (e: any) {
+        log(`Wake discovery on activation failed for ${folder.name}: ${e.message}`);
+      }
+    }
+  })();
 }
 
 export function deactivate() {}

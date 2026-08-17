@@ -16,6 +16,8 @@ const DECLARED_COMMANDS = [
   'claudeRelay.enableAutomaticWake',
   'claudeRelay.disableAutomaticWake',
   'claudeRelay.showWakeDiagnostics',
+  'claudeRelay.cancelPendingWake',
+  'claudeRelay.resumePendingSession',
 ];
 
 suite('Extension Test Suite', () => {

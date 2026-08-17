@@ -100,6 +100,14 @@
       {
         "command": "claudeRelay.showWakeDiagnostics",
         "title": "Claude Relay: Show Wake Diagnostics"
+      },
+      {
+        "command": "claudeRelay.cancelPendingWake",
+        "title": "Claude Relay: Cancel Pending Wake"
+      },
+      {
+        "command": "claudeRelay.resumePendingSession",
+        "title": "Claude Relay: Resume Pending Session"
       }
     ],
     "viewsContainers": {
@@ -176,7 +184,7 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run build",
-    "prebuild": "pnpm --filter @claude-relay/core run build",
+    "prebuild": "pnpm --filter @claude-relay/core run build && pnpm --filter @claude-relay/wake-runtime run build",
     "build": "esbuild src/extension.ts --bundle --external:vscode --format=cjs --platform=node --outfile=dist/extension.js",
     "watch": "tsc -watch -p ./",
     "pretest": "pnpm run build",
@@ -184,12 +192,13 @@
     "test:unit": "vitest run tests",
     "test:host": "tsc -p ./ && node dist/test/runTest.js",
     "lint": "eslint src --ext ts",
-    "pretypecheck": "pnpm --filter @claude-relay/core run build",
+    "pretypecheck": "pnpm --filter @claude-relay/core run build && pnpm --filter @claude-relay/wake-runtime run build",
     "typecheck": "tsc --project tsconfig.typecheck.json",
     "package": "npx vsce package --no-dependencies"
   },
   "dependencies": {
-    "@claude-relay/core": "workspace:*"
+    "@claude-relay/core": "workspace:*",
+    "@claude-relay/wake-runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
