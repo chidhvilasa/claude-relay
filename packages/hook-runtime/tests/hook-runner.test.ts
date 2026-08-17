@@ -24,8 +24,9 @@ function initRepo(dir: string): void {
   sh('git commit -q -m init', dir);
 }
 
-function runHook(payload: string | Buffer, opts: { cwdOverride?: string; env?: NodeJS.ProcessEnv } = {}) {
-  const result = cp.spawnSync(process.execPath, [RUNNER_PATH], {
+function runHook(payload: string | Buffer, opts: { cwdOverride?: string; env?: NodeJS.ProcessEnv; eventArg?: string } = {}) {
+  const args = opts.eventArg !== undefined ? [RUNNER_PATH, opts.eventArg] : [RUNNER_PATH];
+  const result = cp.spawnSync(process.execPath, args, {
     input: payload,
     cwd: opts.cwdOverride,
     env: opts.env ?? process.env,
@@ -41,8 +42,22 @@ function checkpointFiles(workspace: string): string[] {
   return fs.readdirSync(dir).filter(f => f.endsWith('.json'));
 }
 
+// Real Claude Code hook payload shape (v0.2.2 hotfix): the event is
+// identified by `hook_event_name`, the session by `session_id` -- both
+// snake_case, neither "type"/"event"/"sessionId". Confirmed by decompiling
+// the actual installed claude.exe and by code.claude.com/docs/en/hooks.md's
+// own example payload. This fixture intentionally matches that real shape,
+// not the old guess, so these tests actually exercise Claude Code's real
+// contract instead of re-testing the bug against itself.
 function makePayload(type: string, cwd: string, extra: Record<string, unknown> = {}): string {
-  return JSON.stringify({ type, sessionId: 'ses_test', cwd, timestamp: new Date().toISOString(), ...extra });
+  return JSON.stringify({ hook_event_name: type, session_id: 'ses_test', cwd, timestamp: new Date().toISOString(), ...extra });
+}
+
+// Mirrors a real install exactly: hooks.json invokes `node hook-runner.cjs
+// <EventName>` (argv) AND Claude Code's own payload carries `hook_event_name`
+// (stdin). Both signals present and agreeing is the normal, real-world case.
+function runRealisticHook(type: string, cwd: string, extra: Record<string, unknown> = {}) {
+  return runHook(makePayload(type, cwd, extra), { eventArg: type });
 }
 
 const cleanupDirs: string[] = [];
@@ -62,7 +77,7 @@ describe('hook-runner: valid input', () => {
   it('SessionStart writes a lightweight checkpoint', () => {
     const repo = newRepoDir('session-start');
     initRepo(repo);
-    const result = runHook(makePayload('SessionStart', repo));
+    const result = runRealisticHook('SessionStart', repo);
     expect(result.status).toBe(0);
     const files = checkpointFiles(repo);
     expect(files).toHaveLength(1);
@@ -75,7 +90,7 @@ describe('hook-runner: valid input', () => {
   it('PreCompact writes a recovery checkpoint', () => {
     const repo = newRepoDir('pre-compact');
     initRepo(repo);
-    const result = runHook(makePayload('PreCompact', repo));
+    const result = runRealisticHook('PreCompact', repo);
     expect(result.status).toBe(0);
     const files = checkpointFiles(repo);
     expect(files).toHaveLength(1);
@@ -87,7 +102,7 @@ describe('hook-runner: valid input', () => {
   it('StopFailure writes a recovery checkpoint', () => {
     const repo = newRepoDir('stop-failure');
     initRepo(repo);
-    const result = runHook(makePayload('StopFailure', repo));
+    const result = runRealisticHook('StopFailure', repo);
     expect(result.status).toBe(0);
     const checkpoint = JSON.parse(fs.readFileSync(path.join(repo, '.relay', 'checkpoints', checkpointFiles(repo)[0]), 'utf-8'));
     expect(checkpoint.type).toBe('recovery');
@@ -115,8 +130,8 @@ describe('hook-runner: malformed/hostile input degrades safely', () => {
   it('oversized input (>256KB) exits 0 and writes nothing', () => {
     const repo = newRepoDir('oversized');
     initRepo(repo);
-    const huge = JSON.stringify({ type: 'PreCompact', cwd: repo, pad: 'x'.repeat(300 * 1024) });
-    const result = runHook(huge, { cwdOverride: repo });
+    const huge = JSON.stringify({ hook_event_name: 'PreCompact', cwd: repo, pad: 'x'.repeat(300 * 1024) });
+    const result = runHook(huge, { cwdOverride: repo, eventArg: 'PreCompact' });
     expect(result.status).toBe(0);
     expect(checkpointFiles(repo)).toHaveLength(0);
   });
@@ -124,17 +139,72 @@ describe('hook-runner: malformed/hostile input degrades safely', () => {
   it('unknown event type exits 0 and writes nothing', () => {
     const repo = newRepoDir('unknown-event');
     initRepo(repo);
-    const result = runHook(makePayload('SomeRandomEvent', repo));
+    const result = runRealisticHook('SomeRandomEvent', repo);
     expect(result.status).toBe(0);
     expect(checkpointFiles(repo)).toHaveLength(0);
   });
 
-  it('missing required "type" field exits 0 and writes nothing', () => {
+  it('missing event-name field/arg entirely exits 0 and writes nothing', () => {
     const repo = newRepoDir('missing-type');
     initRepo(repo);
     const result = runHook(JSON.stringify({ cwd: repo, timestamp: new Date().toISOString() }));
     expect(result.status).toBe(0);
     expect(checkpointFiles(repo)).toHaveLength(0);
+  });
+});
+
+describe('hook-runner: event-type resolution (regression coverage for the hook_event_name bug)', () => {
+  // This whole describe block exists because of a real, confirmed production
+  // bug: the handler used to read `eventPayload.type || eventPayload.event`,
+  // which is never present on a real Claude Code hook payload (the real
+  // field is `hook_event_name`; confirmed directly in the installed
+  // claude.exe binary and in current official docs). Every real hook
+  // invocation, from every user of released Plugin <= 0.2.1, silently no-op'd
+  // -- these tests pin each individual signal path so this exact class of bug
+  // (a test fixture silently drifting from the real contract, so tests pass
+  // while the real integration is broken) can't reoccur unnoticed again.
+
+  it('resolves the event from the real payload field (hook_event_name) with no argv given at all', () => {
+    const repo = newRepoDir('resolve-payload-only');
+    initRepo(repo);
+    const result = runHook(makePayload('PreCompact', repo));
+    expect(result.status).toBe(0);
+    expect(checkpointFiles(repo)).toHaveLength(1);
+  });
+
+  it('falls back to argv[2] when hook_event_name is absent from the payload', () => {
+    const repo = newRepoDir('resolve-argv-fallback');
+    initRepo(repo);
+    const payload = JSON.stringify({ session_id: 'ses_test', cwd: repo });
+    const result = runHook(payload, { eventArg: 'PreCompact' });
+    expect(result.status).toBe(0);
+    const files = checkpointFiles(repo);
+    expect(files).toHaveLength(1);
+    const checkpoint = JSON.parse(fs.readFileSync(path.join(repo, '.relay', 'checkpoints', files[0]), 'utf-8'));
+    expect(checkpoint.reason).toBe('PreCompact');
+  });
+
+  it('hook_event_name is preferred over the old "type" field when both are present', () => {
+    const repo = newRepoDir('payload-field-priority');
+    initRepo(repo);
+    const payload = JSON.stringify({ hook_event_name: 'PreCompact', type: 'StopFailure', session_id: 'ses_test', cwd: repo });
+    const result = runHook(payload);
+    expect(result.status).toBe(0);
+    const files = checkpointFiles(repo);
+    expect(files).toHaveLength(1);
+    const checkpoint = JSON.parse(fs.readFileSync(path.join(repo, '.relay', 'checkpoints', files[0]), 'utf-8'));
+    expect(checkpoint.reason).toBe('PreCompact');
+  });
+
+  it('prefers hook_event_name over a mismatched argv when both are present', () => {
+    const repo = newRepoDir('payload-wins');
+    initRepo(repo);
+    const result = runHook(makePayload('PreCompact', repo), { eventArg: 'StopFailure' });
+    expect(result.status).toBe(0);
+    const files = checkpointFiles(repo);
+    expect(files).toHaveLength(1);
+    const checkpoint = JSON.parse(fs.readFileSync(path.join(repo, '.relay', 'checkpoints', files[0]), 'utf-8'));
+    expect(checkpoint.reason).toBe('PreCompact');
   });
 
   it('shell metacharacters in cwd do not execute and exit safely', () => {
@@ -142,7 +212,7 @@ describe('hook-runner: malformed/hostile input degrades safely', () => {
     // rather than assuming shell:false on the git calls is the whole story.
     const marker = path.join(os.tmpdir(), `pwned-marker-${Date.now()}.txt`);
     const hostileCwd = `; touch ${marker} #`;
-    const result = runHook(makePayload('PreCompact', hostileCwd));
+    const result = runRealisticHook('PreCompact', hostileCwd);
     expect(result.status).toBe(0);
     expect(fs.existsSync(marker)).toBe(false);
   });
@@ -153,7 +223,7 @@ describe('hook-runner: path edge cases', () => {
     const repo = path.join(os.tmpdir(), `hookrt-space-test (${Date.now()})`);
     cleanupDirs.push(repo);
     initRepo(repo);
-    const result = runHook(makePayload('PreCompact', repo));
+    const result = runRealisticHook('PreCompact', repo);
     expect(result.status).toBe(0);
     expect(checkpointFiles(repo)).toHaveLength(1);
   });
@@ -162,7 +232,7 @@ describe('hook-runner: path edge cases', () => {
     const repo = path.join(os.tmpdir(), `hookrt-λ-relay-测试-${Date.now()}`);
     cleanupDirs.push(repo);
     initRepo(repo);
-    const result = runHook(makePayload('SessionStart', repo));
+    const result = runRealisticHook('SessionStart', repo);
     expect(result.status).toBe(0);
     expect(checkpointFiles(repo)).toHaveLength(1);
   });
@@ -172,7 +242,7 @@ describe('hook-runner: git process behavior', () => {
   it('degrades to "unknown" git fields (not a crash) when cwd is not a git repository', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hookrt-notgit-'));
     cleanupDirs.push(dir);
-    const result = runHook(makePayload('PreCompact', dir));
+    const result = runRealisticHook('PreCompact', dir);
     expect(result.status).toBe(0);
     const files = checkpointFiles(dir);
     expect(files).toHaveLength(1);
@@ -201,6 +271,7 @@ describe('hook-runner: git process behavior', () => {
     const pathSep = isWin ? ';' : ':';
     const result = runHook(makePayload('PreCompact', repo), {
       cwdOverride: repo,
+      eventArg: 'PreCompact',
       env: { ...process.env, PATH: `${shimDir}${pathSep}${process.env.PATH}` },
     });
 
@@ -236,7 +307,7 @@ describe('hook-runner: filesystem safety and state integrity', () => {
       return;
     }
 
-    const result = runHook(makePayload('PreCompact', repo));
+    const result = runRealisticHook('PreCompact', repo);
     expect(result.status).toBe(0);
     // Nothing should have been written into the outside directory.
     expect(fs.readdirSync(outside).filter(f => f.endsWith('.json'))).toHaveLength(0);
@@ -248,7 +319,7 @@ describe('hook-runner: filesystem safety and state integrity', () => {
     initRepo(repoA);
     initRepo(repoB);
 
-    runHook(makePayload('PreCompact', repoA));
+    runRealisticHook('PreCompact', repoA);
     expect(checkpointFiles(repoA)).toHaveLength(1);
     expect(checkpointFiles(repoB)).toHaveLength(0);
   });
@@ -257,7 +328,7 @@ describe('hook-runner: filesystem safety and state integrity', () => {
     const repo = newRepoDir('survives-failure');
     initRepo(repo);
 
-    runHook(makePayload('PreCompact', repo));
+    runRealisticHook('PreCompact', repo);
     const filesBefore = checkpointFiles(repo);
     expect(filesBefore).toHaveLength(1);
     const contentBefore = fs.readFileSync(path.join(repo, '.relay', 'checkpoints', filesBefore[0]), 'utf-8');
@@ -272,7 +343,7 @@ describe('hook-runner: filesystem safety and state integrity', () => {
   it('self-gitignores .relay so its own writes never appear in git status', () => {
     const repo = newRepoDir('self-gitignore');
     initRepo(repo);
-    runHook(makePayload('PreCompact', repo));
+    runRealisticHook('PreCompact', repo);
     expect(fs.existsSync(path.join(repo, '.relay', '.gitignore'))).toBe(true);
     expect(sh('git status --porcelain', repo)).toBe('');
   });
