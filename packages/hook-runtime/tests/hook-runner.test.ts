@@ -225,6 +225,119 @@ describe('hook-runner: wake observability (research instrumentation, not automat
   });
 });
 
+describe('hook-runner: Automatic Wake session-identity capture (Part 5, opt-in only)', () => {
+  function wakeRecordFor(workspace: string, sessionId: string): any {
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256').update(sessionId).digest('hex').slice(0, 16);
+    const p = path.join(workspace, '.relay', 'wake', `${hash}.json`);
+    return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf-8')) : null;
+  }
+
+  function enableWakeInWorkspace(workspace: string): void {
+    const claudeDir = path.join(workspace, '.claude');
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(claudeDir, 'settings.local.json'),
+      JSON.stringify({ env: { CLAUDE_CODE_RETRY_WATCHDOG: '1', CLAUDE_CODE_RESUME_INTERRUPTED_TURN: '1' } }),
+      'utf-8'
+    );
+  }
+
+  it('creates no .relay/wake/ state at all when Automatic Wake is not configured (default-off)', () => {
+    const repo = newRepoDir('wake-capture-disabled');
+    initRepo(repo);
+    runRealisticHook('SessionStart', repo, { session_id: 'ses_capture_test' });
+    expect(fs.existsSync(path.join(repo, '.relay', 'wake'))).toBe(false);
+  });
+
+  it('captures a session identity on SessionStart once Automatic Wake is configured for the workspace', () => {
+    const repo = newRepoDir('wake-capture-session-start');
+    initRepo(repo);
+    enableWakeInWorkspace(repo);
+    const result = runRealisticHook('SessionStart', repo, { session_id: 'ses_capture_1' });
+    expect(result.status).toBe(0);
+    const record = wakeRecordFor(repo, 'ses_capture_1');
+    expect(record).not.toBeNull();
+    expect(record.state).toBe('IDLE');
+    expect(record.sessionId).toBe('ses_capture_1');
+    expect(record.savedGit.branch).toBeDefined();
+  });
+
+  it('refreshes git identity on a later PreCompact for the same still-IDLE session', () => {
+    const repo = newRepoDir('wake-capture-refresh');
+    initRepo(repo);
+    enableWakeInWorkspace(repo);
+    runRealisticHook('SessionStart', repo, { session_id: 'ses_capture_2' });
+    const before = wakeRecordFor(repo, 'ses_capture_2');
+    // Make a real change so HEAD differs between the two hook firings.
+    fs.writeFileSync(path.join(repo, 'b.txt'), 'more\n');
+    sh('git add b.txt', repo);
+    sh('git commit -q -m second', repo);
+    runRealisticHook('PreCompact', repo, { session_id: 'ses_capture_2' });
+    const after = wakeRecordFor(repo, 'ses_capture_2');
+    expect(after.savedGit.head).not.toBe(before.savedGit.head);
+    expect(after.state).toBe('IDLE'); // still not armed by a mere PreCompact
+  });
+
+  it('arms the record (IDLE -> ARMED) on a StopFailure whose error text looks like a usage/rate limit', () => {
+    const repo = newRepoDir('wake-capture-arm');
+    initRepo(repo);
+    enableWakeInWorkspace(repo);
+    runRealisticHook('SessionStart', repo, { session_id: 'ses_capture_3' });
+    runRealisticHook('StopFailure', repo, { session_id: 'ses_capture_3', error: 'rate_limit_error' });
+    const record = wakeRecordFor(repo, 'ses_capture_3');
+    expect(record.state).toBe('ARMED');
+    expect(record.reason).toContain('rate_limit_error');
+    expect(new Date(record.expiresAt).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('does NOT arm on a StopFailure whose error text does not look like a usage/rate limit', () => {
+    const repo = newRepoDir('wake-capture-no-arm');
+    initRepo(repo);
+    enableWakeInWorkspace(repo);
+    runRealisticHook('SessionStart', repo, { session_id: 'ses_capture_4' });
+    runRealisticHook('StopFailure', repo, { session_id: 'ses_capture_4', error: 'network_error' });
+    const record = wakeRecordFor(repo, 'ses_capture_4');
+    expect(record.state).toBe('IDLE');
+  });
+
+  it('never re-arms or overwrites a record that is already past IDLE', () => {
+    const repo = newRepoDir('wake-capture-no-rearm');
+    initRepo(repo);
+    enableWakeInWorkspace(repo);
+    runRealisticHook('SessionStart', repo, { session_id: 'ses_capture_5' });
+    runRealisticHook('StopFailure', repo, { session_id: 'ses_capture_5', error: 'rate_limit' });
+    const armedFirst = wakeRecordFor(repo, 'ses_capture_5');
+    expect(armedFirst.state).toBe('ARMED');
+    // A second StopFailure for the same session must not touch the already-armed record.
+    runRealisticHook('StopFailure', repo, { session_id: 'ses_capture_5', error: 'rate_limit' });
+    const armedSecond = wakeRecordFor(repo, 'ses_capture_5');
+    expect(armedSecond.reason).toBe(armedFirst.reason);
+    expect(armedSecond.expiresAt).toBe(armedFirst.expiresAt);
+  });
+
+  it('captures no wake state at all when the payload has no session_id, even with Automatic Wake configured', () => {
+    const repo = newRepoDir('wake-capture-no-session-id');
+    initRepo(repo);
+    enableWakeInWorkspace(repo);
+    runHook(JSON.stringify({ hook_event_name: 'SessionStart', cwd: repo }), { eventArg: 'SessionStart' });
+    expect(fs.existsSync(path.join(repo, '.relay', 'wake'))).toBe(false);
+  });
+
+  it('keeps wake capture from ever breaking checkpoint creation, even if it were to fail internally', () => {
+    // Configured but with a session id long enough that captureSessionId
+    // rejects it (>256 chars) -- proves the checkpoint path is fully
+    // independent of whether wake capture accepted or skipped anything.
+    const repo = newRepoDir('wake-capture-isolation');
+    initRepo(repo);
+    enableWakeInWorkspace(repo);
+    const result = runRealisticHook('SessionStart', repo, { session_id: 'x'.repeat(300) });
+    expect(result.status).toBe(0);
+    expect(checkpointFiles(repo)).toHaveLength(1);
+    expect(fs.existsSync(path.join(repo, '.relay', 'wake'))).toBe(false);
+  });
+});
+
 describe('hook-runner: malformed/hostile input degrades safely', () => {
   it('malformed JSON exits 0 and writes nothing', () => {
     const repo = newRepoDir('malformed-json');

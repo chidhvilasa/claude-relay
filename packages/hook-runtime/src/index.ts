@@ -1,7 +1,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import * as crypto from 'crypto';
 import { spawnSync } from 'child_process';
+import {
+  captureSessionId,
+  WakeStateStore,
+  AutomaticWakeConfigManager,
+  DEFAULT_MAX_AGE_MS,
+  WakeRecord,
+  WAKE_SCHEMA_VERSION,
+} from '@claude-relay/core';
 
 const MAX_STDIN_BYTES = 256 * 1024; // 256 KB max for hook payload
 
@@ -96,7 +105,8 @@ async function main() {
 
     const head = headRes.stdout ? headRes.stdout.trim() : 'unknown';
     const branch = branchRes.stdout ? branchRes.stdout.trim() : 'unknown';
-    const isDirty = statusRes.stdout ? statusRes.stdout.trim().length > 0 : false;
+    const statusLines = statusRes.stdout ? statusRes.stdout.split('\n').filter((l) => l.trim().length > 0) : [];
+    const isDirty = statusLines.length > 0;
 
     const checkpoint = {
       schemaVersion: '1.0',
@@ -156,6 +166,74 @@ async function main() {
       } catch {
         // best-effort; never fatal to checkpoint creation
       }
+    }
+
+    // Automatic Wake session-identity capture (Part 5). Best-effort, never
+    // fatal to checkpoint creation (own try/catch, same pattern as the
+    // wake-observations block above). Deliberately does NOT create any
+    // `.relay/wake/` state for a user who hasn't opted in to Automatic
+    // Wake -- `configured` is checked first, and nothing below runs at all
+    // if it's false, so a user who never enabled the feature gets exactly
+    // the same `.relay/` contents as before this existed.
+    try {
+      const wakeConfig = new AutomaticWakeConfigManager();
+      const workspaceWake = wakeConfig.getStatus('workspace', workspaceRoot);
+      const userWake = wakeConfig.getStatus('user');
+      if (workspaceWake.configured || userWake.configured) {
+        const sessionId = captureSessionId(eventPayload);
+        if (sessionId) {
+          const wakeStore = new WakeStateStore(workspaceRoot);
+          const now = new Date().toISOString();
+          const savedGit = { branch, head, dirtyCount: statusLines.length };
+          const existing = wakeStore.get(sessionId);
+
+          if (!existing) {
+            const record: WakeRecord = {
+              schemaVersion: WAKE_SCHEMA_VERSION,
+              recordId: crypto.randomBytes(8).toString('hex'),
+              state: 'IDLE',
+              sessionId,
+              project: { path: workspaceRoot },
+              createdAt: now,
+              updatedAt: now,
+              reason: eventType,
+              savedGit,
+              attemptCount: 0,
+              expiresAt: new Date(Date.now() + DEFAULT_MAX_AGE_MS).toISOString(),
+              ownerIdentity: os.userInfo().username,
+            };
+            wakeStore.save(record);
+          } else if (existing.state === 'IDLE') {
+            // Only refresh identity/git fields while nothing has armed this
+            // record yet -- once ARMED (or beyond), a hook firing again for
+            // the same session must not silently overwrite state a wake
+            // attempt may be relying on.
+            wakeStore.save({ ...existing, sessionId, savedGit, updatedAt: now });
+          }
+
+          // Arming signal: a StopFailure whose error text looks like a usage/rate
+          // limit, on a record that's still IDLE (never re-arms an
+          // already-armed/in-flight/terminal record). This is deliberately a
+          // narrow, observable trigger -- not a guess about task completion,
+          // per the task's "Do not guess task completion semantically" rule
+          // applied symmetrically to arming as well as disarming.
+          if (eventType === 'StopFailure') {
+            const errorValue = typeof (eventPayload as Record<string, unknown>).error === 'string' ? (eventPayload as Record<string, unknown>).error as string : '';
+            const looksLikeUsageLimit = /rate.?limit|usage.?limit|quota|429|529|overloaded/i.test(errorValue);
+            const current = wakeStore.get(sessionId);
+            if (looksLikeUsageLimit && current && current.state === 'IDLE') {
+              const configuredMaxAge = Number(workspaceWake.values.CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS ?? userWake.values.CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS);
+              const maxAgeMs = Number.isFinite(configuredMaxAge) && configuredMaxAge > 0 ? configuredMaxAge : DEFAULT_MAX_AGE_MS;
+              wakeStore.transition(sessionId, 'ARMED', {
+                reason: `StopFailure: ${errorValue.slice(0, 128)}`,
+                expiresAt: new Date(Date.now() + maxAgeMs).toISOString(),
+              });
+            }
+          }
+        }
+      }
+    } catch {
+      // best-effort; never fatal to checkpoint creation
     }
 
     // Self-gitignore .relay/ so Relay's own writes never show up in `git

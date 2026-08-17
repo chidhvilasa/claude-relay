@@ -6,8 +6,12 @@
     "build": "esbuild src/index.ts --bundle --platform=node --outfile=../../plugins/claude-relay/runtime/hook-runner.cjs",
     "lint": "eslint src --ext ts",
     "typecheck": "tsc --project tsconfig.typecheck.json",
+    "prebuild": "pnpm --filter @claude-relay/core run build",
     "pretest": "pnpm run build",
     "test": "vitest run tests"
+  },
+  "dependencies": {
+    "@claude-relay/core": "workspace:*"
   },
   "devDependencies": {
     "esbuild": "^0.20.0",
