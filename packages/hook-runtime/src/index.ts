@@ -40,7 +40,24 @@ async function main() {
 
   if (typeof eventPayload !== 'object' || eventPayload === null) process.exit(0);
 
-  const eventType = eventPayload.type || eventPayload.event;
+  // BUG FIX (found during v0.3 automatic-wake work, verified by decompiling the
+  // actual installed claude.exe 2.1.233): every real Claude Code hook payload
+  // identifies its event via `hook_event_name` (confirmed both in current public
+  // docs at code.claude.com/docs/en/hooks.md and directly in the shipped binary's
+  // own hook-payload-construction code, e.g. `{...py(session,...), hook_event_name:
+  // "StopFailure", error:i, ...}`). This file previously read `eventPayload.type ||
+  // eventPayload.event`, which is never present on a real payload -- every
+  // genuine hook invocation from a real Claude Code process silently hit the
+  // `process.exit(0)` early-out below and never wrote a checkpoint. The 20
+  // pre-existing tests all passed because their fixture (`makePayload()`)
+  // constructed the same wrong shape the code expected, so the mismatch was
+  // self-consistent and invisible until checked against the real payload shape.
+  // hooks.json also passes the event name as argv[2] (a value Relay's own
+  // manifest hardcodes, not attacker-influenced), which is kept here as a
+  // fallback for robustness, with the real payload field preferred as the
+  // authoritative source since it comes directly from Claude Code itself.
+  const argvEventType = typeof process.argv[2] === 'string' ? process.argv[2] : undefined;
+  const eventType = eventPayload.hook_event_name || argvEventType || eventPayload.type || eventPayload.event;
   if (typeof eventType !== 'string' || eventType.length > 64) process.exit(0);
 
   const workspaceInput = eventPayload.cwd || process.cwd();
@@ -110,7 +127,13 @@ async function main() {
     // behavior — checkpoint creation above is identical either way.
     if (eventType === 'StopFailure') {
       try {
-        const candidateFields = ['error', 'error_type', 'errorType', 'reason', 'matcher', 'subtype'];
+        // Real StopFailure payload fields, confirmed by decompiling claude.exe 2.1.233:
+        // hook_event_name:"StopFailure", error:<string>, error_details:<unknown>,
+        // last_assistant_message:<string|undefined>. `error_type`/`errorType`/`reason`/
+        // `matcher`/`subtype` were prior guesses that don't appear in the real payload;
+        // kept in the allowlist anyway since capturing them if present is harmless and
+        // costs nothing, in case a future Claude Code version adds one of them.
+        const candidateFields = ['error', 'error_details', 'error_type', 'errorType', 'reason', 'matcher', 'subtype'];
         const observedContext: Record<string, string> = {};
         for (const field of candidateFields) {
           const value = (eventPayload as Record<string, unknown>)[field];
@@ -121,7 +144,8 @@ async function main() {
         const observation = {
           observedAt: new Date().toISOString(),
           eventType,
-          sessionId: typeof eventPayload.sessionId === 'string' ? eventPayload.sessionId.slice(0, 128) : undefined,
+          // Real field name is `session_id` (snake_case), confirmed the same way.
+          sessionId: typeof eventPayload.session_id === 'string' ? eventPayload.session_id.slice(0, 128) : undefined,
           context: observedContext,
         };
         const obsPath = path.join(relayDir, 'wake-observations.jsonl');

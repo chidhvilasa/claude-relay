@@ -59,7 +59,8 @@ async function main() {
   }
   if (typeof eventPayload !== "object" || eventPayload === null)
     process.exit(0);
-  const eventType = eventPayload.type || eventPayload.event;
+  const argvEventType = typeof process.argv[2] === "string" ? process.argv[2] : void 0;
+  const eventType = eventPayload.hook_event_name || argvEventType || eventPayload.type || eventPayload.event;
   if (typeof eventType !== "string" || eventType.length > 64)
     process.exit(0);
   const workspaceInput = eventPayload.cwd || process.cwd();
@@ -107,7 +108,7 @@ async function main() {
     }
     if (eventType === "StopFailure") {
       try {
-        const candidateFields = ["error", "error_type", "errorType", "reason", "matcher", "subtype"];
+        const candidateFields = ["error", "error_details", "error_type", "errorType", "reason", "matcher", "subtype"];
         const observedContext = {};
         for (const field of candidateFields) {
           const value = eventPayload[field];
@@ -118,7 +119,8 @@ async function main() {
         const observation = {
           observedAt: (/* @__PURE__ */ new Date()).toISOString(),
           eventType,
-          sessionId: typeof eventPayload.sessionId === "string" ? eventPayload.sessionId.slice(0, 128) : void 0,
+          // Real field name is `session_id` (snake_case), confirmed the same way.
+          sessionId: typeof eventPayload.session_id === "string" ? eventPayload.session_id.slice(0, 128) : void 0,
           context: observedContext
         };
         const obsPath = path.join(relayDir, "wake-observations.jsonl");
