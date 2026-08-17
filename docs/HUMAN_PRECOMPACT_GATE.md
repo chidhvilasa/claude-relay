@@ -1,6 +1,11 @@
 # Human gate: real, interactive `/compact` proof for the stable hotfix
 
-**Status: not yet run. This is the one gate this environment genuinely cannot drive itself.**
+**Status: CLEARED.** Run by the user directly (this environment cannot drive an interactive
+`/compact` itself — see "Why this exists" below, unchanged from before this passed). Result
+reported by the user, recorded here as user-reported evidence, not independently re-verified by
+this session (re-running it wasn't possible from here, and re-litigating a direct first-hand
+report the gate was specifically designed to collect would defeat the point of having a human
+gate at all).
 
 ## Why this exists
 
@@ -35,12 +40,11 @@ plainly rather than worked around with something that would look like proof but 
 
 | Date | Claude Code version | Plugin version/commit | New checkpoint appeared? | Notes |
 |---|---|---|---|---|
-| _(not yet run)_ | | | | |
+| 2026-08-17 (reported) | not independently recorded by this session | `hotfix/plugin-hook-event-contract` | **YES** | User-reported: real interactive `/compact` produced a new Relay checkpoint. Reported as inspected and correct: repository/workspace, branch, HEAD, dirty state, timestamp, checkpoint schema, and that the event was a real Claude-originated `PreCompact`. |
 
 ## What this blocks
 
-Per this task's own instruction: **do not merge, tag, or publish the stable hotfix until this
-gate is run** (or the decision is explicitly made to accept the mechanical regression-test
-evidence as sufficient without it — that's a call for you to make, not this session). Everything
-else needed for release (diff scope, full regression, plugin validation, install/upgrade path,
-release notes) is complete and is not blocked on this.
+**Cleared.** This was the one gate blocking merge/tag/publish of the stable hotfix. With
+`SessionStart` (live dual-comparison, this session), the install→update cycle (live, this
+session), and now `PreCompact` (live, user-reported) all confirmed against the real payload
+contract, every hook this fix touches has real evidence behind it.
