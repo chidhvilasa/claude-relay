@@ -182,6 +182,28 @@ describe.skipIf(fakeClaudePath === null)('spawnFallbackResumer (real subprocess,
     expect(WAKE_CONTINUATION_PROMPT.length).toBeGreaterThan(50);
   });
 
+  it.skipIf(process.platform !== 'win32')('refuses to spawn a .cmd/.bat directly on Windows rather than attempting a fragile cmd.exe wrapper', async () => {
+    // Found while wiring the Level 2 trigger end-to-end: `claude` resolves to
+    // `claude.cmd` via npm's global-bin shim on a real Windows install, not a
+    // bare .exe. `child_process.spawn` with `shell:false` cannot execute a
+    // .cmd file directly (EINVAL, Node's CVE-2024-27980 fix). A `cmd.exe /c`
+    // wrapper was tried and abandoned -- it broke on a real space-containing
+    // path combined with a real multi-word prompt argument, confirmed
+    // empirically across several documented-safe quoting strategies. The
+    // fix lives in claude-resolver.ts (unwrap the npm shim to its real .exe
+    // target); this function's job is just to refuse the unsafe case
+    // cleanly if it's ever handed one anyway, which this pins.
+    const cmdPath = path.resolve(__dirname, 'fixtures', 'fake-claude.cmd');
+    const result = await spawnFallbackResumer({
+      claudePath: cmdPath,
+      sessionId: 'ses_test',
+      workspaceRoot: os.tmpdir(),
+      extraEnv: { FAKE_CLAUDE_BEHAVIOR: 'success' },
+    });
+    expect(result.outcome).toBe('failed');
+    expect(result.detail).toContain('.cmd/.bat');
+  });
+
   it('never passes --dangerously-skip-permissions or bypassPermissions in any form', async () => {
     // Static contract check on the actual args the function constructs (not
     // the whole source file, which legitimately *mentions* these flag names

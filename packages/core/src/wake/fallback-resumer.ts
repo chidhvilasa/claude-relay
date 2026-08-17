@@ -45,6 +45,28 @@ const MAX_CAPTURED_OUTPUT = 512 * 1024; // bounded capture, never unbounded buff
 export function spawnFallbackResumer(options: FallbackResumerOptions): Promise<FallbackResumerResult> {
   const args = ['-p', WAKE_CONTINUATION_PROMPT, '--resume', options.sessionId, '--output-format', 'json'];
 
+  // `options.claudePath` is expected to already be a directly-spawnable
+  // executable (never a `.cmd`/`.bat`) — claude-resolver.ts's
+  // `resolveClaudeExecutable`/`findClaudeOnPath` unwrap npm's Windows `.cmd`
+  // shim to its real `.exe` target specifically so this function never has
+  // to route through `cmd.exe`. That routing was tried and abandoned: a real
+  // path containing a space plus a real multi-word prompt argument broke
+  // cmd.exe's own re-parsing of the `/c` command line even with several
+  // documented-safe quoting strategies, confirmed empirically. Refusing here
+  // rather than attempting a fragile workaround is the conservative choice —
+  // a caller that somehow still passes a `.cmd`/`.bat` gets a clear, safe
+  // failure instead of an unreliable spawn.
+  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(options.claudePath)) {
+    return Promise.resolve({
+      outcome: 'failed',
+      detail: `Refusing to spawn a .cmd/.bat executable directly (${options.claudePath}) — resolve it to its real target first (see claude-resolver.ts's resolveNpmCmdShimTarget)`,
+      exitCode: null,
+      signal: null,
+      stdout: '',
+      stderr: '',
+    });
+  }
+
   return new Promise((resolve) => {
     const child = spawn(options.claudePath, args, {
       cwd: options.workspaceRoot,

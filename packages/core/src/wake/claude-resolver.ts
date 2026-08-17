@@ -51,9 +51,41 @@ function isExecutableCandidate(candidatePath: string): boolean {
 }
 
 /**
+ * On Windows, `claude` on PATH resolves to `claude.cmd` under a standard npm
+ * global install — not a bare `.exe`. Confirmed the hard way while wiring the
+ * Level 2 fallback resumer end to end: `child_process.spawn` with
+ * `shell:false` can't execute a `.cmd`/`.bat` directly (EINVAL, Node's
+ * CVE-2024-27980 fix), and wrapping it via `cmd.exe /c` turned out to be
+ * fragile in exactly the multi-argument-with-spaces case this needs — a real
+ * path containing a space plus a real prompt argument containing spaces
+ * broke cmd.exe's own re-parsing of the line, empirically, even after trying
+ * several documented-safe quoting combinations.
+ *
+ * The clean fix: npm's generated `.cmd` shims follow one fixed, well-known
+ * template (`"%dp0%\<relative-path-to-real-binary>"   %*`). Reading the shim
+ * and extracting that relative path resolves straight to the real,
+ * directly-executable target (an `.exe` in Claude Code's case) with zero
+ * shell/cmd.exe involvement at all — the safest possible outcome, not a
+ * workaround.
+ */
+export function resolveNpmCmdShimTarget(cmdPath: string): string | undefined {
+  try {
+    const content = fs.readFileSync(cmdPath, 'utf-8');
+    const match = content.match(/"%dp0%\\(.+?)"\s+%\*/i) || content.match(/"%~dp0%?\\(.+?)"\s+%\*/i);
+    if (!match) return undefined;
+    const target = path.join(path.dirname(cmdPath), match[1]);
+    return isExecutableCandidate(target) ? target : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Safe, non-shell PATH search. Deliberately does not use `which`/`where` via
  * a shell — walks `process.env.PATH` directly and checks candidates with
- * `fs.statSync`/`fs.accessSync`.
+ * `fs.statSync`/`fs.accessSync`. On Windows, a `.cmd` match is unwrapped to
+ * its real target via `resolveNpmCmdShimTarget` when possible, so the
+ * returned path is directly spawnable without ever going through cmd.exe.
  */
 export function findClaudeOnPath(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const pathVar = env.PATH || env.Path || env.path || '';
@@ -64,7 +96,13 @@ export function findClaudeOnPath(env: NodeJS.ProcessEnv = process.env): string |
     if (!dir) continue;
     for (const name of names) {
       const candidate = path.join(dir, name);
-      if (isExecutableCandidate(candidate)) return candidate;
+      if (!isExecutableCandidate(candidate)) continue;
+      if (isWin && /\.cmd$/i.test(candidate)) {
+        const unwrapped = resolveNpmCmdShimTarget(candidate);
+        if (unwrapped) return unwrapped;
+        continue; // an unresolvable .cmd shim is not directly spawnable -- keep searching rather than returning it
+      }
+      return candidate;
     }
   }
   return undefined;
@@ -90,10 +128,15 @@ export function fingerprintExecutable(resolvedPath: string): ClaudeExecutableFin
   }
 }
 
-/** Resolves a claude executable: a caller-supplied configured path first, else a PATH search. Never falls back to invoking a bare command name through a shell. */
+/** Resolves a claude executable: a caller-supplied configured path first, else a PATH search. Never falls back to invoking a bare command name through a shell. A configured `.cmd`/`.bat` path is unwrapped the same way a PATH-found one is (see `resolveNpmCmdShimTarget`); if it can't be unwrapped, resolution fails rather than returning something that would need an unsafe cmd.exe wrapper to run. */
 export function resolveClaudeExecutable(configuredPath?: string, env: NodeJS.ProcessEnv = process.env): ClaudeExecutableFingerprint | undefined {
   if (configuredPath) {
     if (!isExecutableCandidate(configuredPath)) return undefined;
+    if (process.platform === 'win32' && /\.cmd$/i.test(configuredPath)) {
+      const unwrapped = resolveNpmCmdShimTarget(configuredPath);
+      if (!unwrapped) return undefined;
+      return fingerprintExecutable(unwrapped);
+    }
     return fingerprintExecutable(configuredPath);
   }
   const found = findClaudeOnPath(env);

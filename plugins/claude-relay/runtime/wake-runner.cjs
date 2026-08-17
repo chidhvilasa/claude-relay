@@ -48,7 +48,7 @@ var require_git_provider = __commonJS({
         this.workspacePath = workspacePath;
       }
       async execGit(args) {
-        return new Promise((resolve2, reject) => {
+        return new Promise((resolve, reject) => {
           const child = (0, child_process_1.spawn)("git", args, { cwd: this.workspacePath, env: process.env, shell: false });
           let stdout = "";
           let stderr = "";
@@ -81,7 +81,7 @@ var require_git_provider = __commonJS({
                 return reject(new Error(`git ${args[0]} failed: ${stderr.trim() || `exit code ${code}`}`));
               }
             }
-            resolve2(stdout.trim());
+            resolve(stdout.trim());
           });
           child.on("error", (err) => {
             if (settled)
@@ -3264,7 +3264,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve2.call(this, root, ref);
+      let _sch = resolve.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -3291,7 +3291,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve2(root, ref) {
+    function resolve(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3923,7 +3923,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve2(baseURI, relativeURI, options) {
+    function resolve(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const { parsed: baseParsed, malformedAuthorityOrPort: baseMalformed } = parseWithStatus(baseURI, schemelessOptions);
       const { parsed: relativeParsed, malformedAuthorityOrPort: relativeMalformed } = parseWithStatus(relativeURI, schemelessOptions);
@@ -4208,7 +4208,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve2,
+      resolve,
       resolveComponent,
       equal,
       serialize,
@@ -7431,7 +7431,7 @@ var require_checkpoint_store = __commonJS({
     exports2.LocalCheckpointStore = void 0;
     var fs2 = __importStar(require("fs"));
     var path2 = __importStar(require("path"));
-    var crypto2 = __importStar(require("crypto"));
+    var crypto = __importStar(require("crypto"));
     var validator_1 = require_validator();
     var relay_dir_1 = require_relay_dir();
     var LocalCheckpointStore = class {
@@ -7453,7 +7453,7 @@ var require_checkpoint_store = __commonJS({
           throw new Error("Invalid Checkpoint schema");
         }
         const filePath = path2.join(this.dir, `${checkpoint.id}.json`);
-        const tempPath = `${filePath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
+        const tempPath = `${filePath}.tmp.${crypto.randomBytes(4).toString("hex")}`;
         fs2.writeFileSync(tempPath, JSON.stringify(checkpoint, null, 2), "utf-8");
         fs2.renameSync(tempPath, filePath);
       }
@@ -7536,7 +7536,7 @@ var require_handoff_store = __commonJS({
     exports2.LocalHandoffStore = void 0;
     var fs2 = __importStar(require("fs"));
     var path2 = __importStar(require("path"));
-    var crypto2 = __importStar(require("crypto"));
+    var crypto = __importStar(require("crypto"));
     var validator_1 = require_validator();
     var relay_dir_1 = require_relay_dir();
     var LocalHandoffStore = class {
@@ -7562,7 +7562,7 @@ var require_handoff_store = __commonJS({
           semantic: handoff.semantic,
           git: handoff.git
         });
-        return crypto2.createHash("sha256").update(payload).digest("hex");
+        return crypto.createHash("sha256").update(payload).digest("hex");
       }
       async save(handoff) {
         if (!validator_1.SchemaValidator.validateHandoff(handoff)) {
@@ -7573,7 +7573,7 @@ var require_handoff_store = __commonJS({
           handoff.integrity.hash = expectedHash;
         }
         const filePath = path2.join(this.dir, `${handoff.id}.json`);
-        const tempPath = `${filePath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
+        const tempPath = `${filePath}.tmp.${crypto.randomBytes(4).toString("hex")}`;
         fs2.writeFileSync(tempPath, JSON.stringify(handoff, null, 2), "utf-8");
         fs2.renameSync(tempPath, filePath);
       }
@@ -7666,8 +7666,8 @@ var require_wake_config = __commonJS({
     exports2.AutomaticWakeConfigManager = exports2.DEFAULT_RESUME_PROMPT = exports2.DEFAULT_MAX_AGE_MS = exports2.WAKE_ENV_KEYS = void 0;
     var fs2 = __importStar(require("fs"));
     var path2 = __importStar(require("path"));
-    var os2 = __importStar(require("os"));
-    var crypto2 = __importStar(require("crypto"));
+    var os = __importStar(require("os"));
+    var crypto = __importStar(require("crypto"));
     exports2.WAKE_ENV_KEYS = [
       "CLAUDE_CODE_RETRY_WATCHDOG",
       "CLAUDE_CODE_RESUME_INTERRUPTED_TURN",
@@ -7679,7 +7679,7 @@ var require_wake_config = __commonJS({
     var AutomaticWakeConfigManager2 = class {
       resolveSettingsPath(scope, workspaceRoot) {
         if (scope === "user") {
-          return process.env.CLAUDE_CONFIG_DIR ? path2.join(process.env.CLAUDE_CONFIG_DIR, "settings.json") : path2.join(os2.homedir(), ".claude", "settings.json");
+          return process.env.CLAUDE_CONFIG_DIR ? path2.join(process.env.CLAUDE_CONFIG_DIR, "settings.json") : path2.join(os.homedir(), ".claude", "settings.json");
         }
         if (!workspaceRoot) {
           throw new Error('workspaceRoot is required for scope "workspace"');
@@ -7707,7 +7707,7 @@ var require_wake_config = __commonJS({
           const backupPath = `${settingsPath}.backup-${Date.now()}`;
           fs2.writeFileSync(backupPath, fs2.readFileSync(settingsPath), "utf-8");
         }
-        const tempPath = `${settingsPath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
+        const tempPath = `${settingsPath}.tmp.${crypto.randomBytes(4).toString("hex")}`;
         const serialized = JSON.stringify(settings, null, 2);
         fs2.writeFileSync(tempPath, serialized, "utf-8");
         fs2.renameSync(tempPath, settingsPath);
@@ -7855,7 +7855,7 @@ var require_wake_store = __commonJS({
     exports2.hashSessionId = hashSessionId;
     var fs2 = __importStar(require("fs"));
     var path2 = __importStar(require("path"));
-    var crypto2 = __importStar(require("crypto"));
+    var crypto = __importStar(require("crypto"));
     var wake_types_1 = require_wake_types();
     var LEGAL_TRANSITIONS = {
       IDLE: ["ARMED", "CANCELLED"],
@@ -7890,7 +7890,7 @@ var require_wake_store = __commonJS({
       return LEGAL_TRANSITIONS[from]?.includes(to) ?? false;
     }
     function hashSessionId(sessionId) {
-      return crypto2.createHash("sha256").update(sessionId).digest("hex").slice(0, 16);
+      return crypto.createHash("sha256").update(sessionId).digest("hex").slice(0, 16);
     }
     var WakeStateStore2 = class {
       workspaceRoot;
@@ -7911,7 +7911,7 @@ var require_wake_store = __commonJS({
       }
       atomicWrite(filePath, data) {
         this.ensureDir();
-        const tmp = `${filePath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
+        const tmp = `${filePath}.tmp.${crypto.randomBytes(4).toString("hex")}`;
         const json = JSON.stringify(data, null, 2);
         fs2.writeFileSync(tmp, json, "utf-8");
         JSON.parse(fs2.readFileSync(tmp, "utf-8"));
@@ -8033,7 +8033,7 @@ var require_wake_lease = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.WakeLeaseManager = exports2.DEFAULT_LEASE_TTL_MS = void 0;
     exports2.DEFAULT_LEASE_TTL_MS = 5 * 60 * 1e3;
-    var WakeLeaseManager = class {
+    var WakeLeaseManager2 = class {
       store;
       constructor(store) {
         this.store = store;
@@ -8081,7 +8081,7 @@ var require_wake_lease = __commonJS({
         this.store.save({ ...rest, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
       }
     };
-    exports2.WakeLeaseManager = WakeLeaseManager;
+    exports2.WakeLeaseManager = WakeLeaseManager2;
   }
 });
 
@@ -8134,9 +8134,9 @@ var require_repo_safety = __commonJS({
       };
     }();
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.classifyRepoSafety = classifyRepoSafety;
+    exports2.classifyRepoSafety = classifyRepoSafety2;
     var fs2 = __importStar(require("fs"));
-    function classifyRepoSafety(record, currentWorkspacePath, currentGitDir, currentGit) {
+    function classifyRepoSafety2(record, currentWorkspacePath, currentGitDir, currentGit) {
       if (!fs2.existsSync(currentWorkspacePath)) {
         return { classification: "UNSAFE", reason: "Workspace path no longer exists on disk" };
       }
@@ -8166,9 +8166,9 @@ var require_session_capture = __commonJS({
   "../core/dist/wake/session-capture.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.captureSessionId = captureSessionId2;
+    exports2.captureSessionId = captureSessionId;
     exports2.captureSessionIdentity = captureSessionIdentity;
-    function captureSessionId2(payload) {
+    function captureSessionId(payload) {
       if (typeof payload !== "object" || payload === null)
         return void 0;
       const value = payload.session_id;
@@ -8180,7 +8180,7 @@ var require_session_capture = __commonJS({
       return trimmed;
     }
     function captureSessionIdentity(event, payload) {
-      const sessionId = captureSessionId2(payload);
+      const sessionId = captureSessionId(payload);
       if (!sessionId)
         return void 0;
       return { sessionId, event, capturedAt: (/* @__PURE__ */ new Date()).toISOString() };
@@ -8240,11 +8240,11 @@ var require_claude_resolver = __commonJS({
     exports2.resolveNpmCmdShimTarget = resolveNpmCmdShimTarget;
     exports2.findClaudeOnPath = findClaudeOnPath;
     exports2.fingerprintExecutable = fingerprintExecutable;
-    exports2.resolveClaudeExecutable = resolveClaudeExecutable;
-    exports2.verifyClaudeExecutable = verifyClaudeExecutable;
+    exports2.resolveClaudeExecutable = resolveClaudeExecutable2;
+    exports2.verifyClaudeExecutable = verifyClaudeExecutable2;
     var fs2 = __importStar(require("fs"));
     var path2 = __importStar(require("path"));
-    var crypto2 = __importStar(require("crypto"));
+    var crypto = __importStar(require("crypto"));
     var HASH_PREFIX_BYTES = 4 * 1024 * 1024;
     function isExecutableCandidate(candidatePath) {
       try {
@@ -8301,7 +8301,7 @@ var require_claude_resolver = __commonJS({
         const readLen = Math.min(stat.size, HASH_PREFIX_BYTES);
         const buf = Buffer.alloc(readLen);
         fs2.readSync(fd, buf, 0, readLen, 0);
-        const hash = crypto2.createHash("sha256").update(buf).digest("hex");
+        const hash = crypto.createHash("sha256").update(buf).digest("hex");
         return {
           resolvedPath,
           sizeBytes: stat.size,
@@ -8313,7 +8313,7 @@ var require_claude_resolver = __commonJS({
         fs2.closeSync(fd);
       }
     }
-    function resolveClaudeExecutable(configuredPath, env = process.env) {
+    function resolveClaudeExecutable2(configuredPath, env = process.env) {
       if (configuredPath) {
         if (!isExecutableCandidate(configuredPath))
           return void 0;
@@ -8330,7 +8330,7 @@ var require_claude_resolver = __commonJS({
         return void 0;
       return fingerprintExecutable(found);
     }
-    function verifyClaudeExecutable(expected) {
+    function verifyClaudeExecutable2(expected) {
       if (!fs2.existsSync(expected.resolvedPath)) {
         return { ok: false, reason: `Executable no longer exists at ${expected.resolvedPath}` };
       }
@@ -8358,13 +8358,13 @@ var require_fallback_resumer = __commonJS({
   "../core/dist/wake/fallback-resumer.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.spawnFallbackResumer = spawnFallbackResumer;
+    exports2.spawnFallbackResumer = spawnFallbackResumer2;
     exports2.classifyOutcome = classifyOutcome;
     var child_process_1 = require("child_process");
     var continuation_prompt_1 = require_continuation_prompt();
     var DEFAULT_TIMEOUT_MS = 6 * 60 * 60 * 1e3;
     var MAX_CAPTURED_OUTPUT = 512 * 1024;
-    function spawnFallbackResumer(options) {
+    function spawnFallbackResumer2(options) {
       const args = ["-p", continuation_prompt_1.WAKE_CONTINUATION_PROMPT, "--resume", options.sessionId, "--output-format", "json"];
       if (process.platform === "win32" && /\.(cmd|bat)$/i.test(options.claudePath)) {
         return Promise.resolve({
@@ -8376,7 +8376,7 @@ var require_fallback_resumer = __commonJS({
           stderr: ""
         });
       }
-      return new Promise((resolve2) => {
+      return new Promise((resolve) => {
         const child = (0, child_process_1.spawn)(options.claudePath, args, {
           cwd: options.workspaceRoot,
           env: { ...process.env, ...options.extraEnv },
@@ -8391,7 +8391,7 @@ var require_fallback_resumer = __commonJS({
             return;
           settled = true;
           child.kill();
-          resolve2({ outcome: "failed", detail: `Timed out after ${options.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms without completing`, exitCode: null, signal: null, stdout, stderr });
+          resolve({ outcome: "failed", detail: `Timed out after ${options.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms without completing`, exitCode: null, signal: null, stdout, stderr });
         }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
         child.stdout?.on("data", (chunk) => {
           if (stdout.length < MAX_CAPTURED_OUTPUT)
@@ -8406,14 +8406,14 @@ var require_fallback_resumer = __commonJS({
             return;
           settled = true;
           clearTimeout(timeout);
-          resolve2({ outcome: "failed", detail: `Failed to spawn: ${err.message}`, exitCode: null, signal: null, stdout, stderr });
+          resolve({ outcome: "failed", detail: `Failed to spawn: ${err.message}`, exitCode: null, signal: null, stdout, stderr });
         });
         child.on("close", (code, signal) => {
           if (settled)
             return;
           settled = true;
           clearTimeout(timeout);
-          resolve2(classifyOutcome(code, signal, stdout, stderr));
+          resolve(classifyOutcome(code, signal, stdout, stderr));
         });
       });
     }
@@ -8645,7 +8645,7 @@ var require_wakeup_generator = __commonJS({
     exports2.WakeupGenerator = void 0;
     var fs2 = __importStar(require("fs"));
     var path2 = __importStar(require("path"));
-    var crypto2 = __importStar(require("crypto"));
+    var crypto = __importStar(require("crypto"));
     var redactor_1 = require_redactor();
     var WakeupGenerator = class {
       static generate(handoff, workspacePath) {
@@ -8742,7 +8742,7 @@ ${r(handoff.semantic.nextAction)}
 
 `;
         const outputPath = path2.join(workspacePath, ".relay", "WAKEUP.md");
-        const tempPath = `${outputPath}.tmp.${crypto2.randomBytes(4).toString("hex")}`;
+        const tempPath = `${outputPath}.tmp.${crypto.randomBytes(4).toString("hex")}`;
         fs2.writeFileSync(tempPath, content, "utf-8");
         fs2.renameSync(tempPath, outputPath);
       }
@@ -8800,196 +8800,171 @@ var require_dist2 = __commonJS({
   }
 });
 
-// src/index.ts
+// src/wake-controller.ts
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
-var os = __toESM(require("os"));
-var crypto = __toESM(require("crypto"));
-var import_child_process = require("child_process");
 var import_core = __toESM(require_dist2());
-var MAX_STDIN_BYTES = 256 * 1024;
-async function main() {
-  const stdinBuffer = Buffer.alloc(MAX_STDIN_BYTES);
-  let bytesRead = 0;
-  try {
-    while (true) {
-      const chunk = fs.readFileSync(0);
-      if (chunk.length === 0)
-        break;
-      if (bytesRead + chunk.length > MAX_STDIN_BYTES) {
-        process.exit(0);
-      }
-      chunk.copy(stdinBuffer, bytesRead);
-      bytesRead += chunk.length;
+var WakeController = class {
+  constructor(workspaceRoot, deps) {
+    this.workspaceRoot = workspaceRoot;
+    this.deps = deps;
+    this.store = new import_core.WakeStateStore(workspaceRoot);
+    this.lease = new import_core.WakeLeaseManager(this.store);
+  }
+  store;
+  lease;
+  configManager = new import_core.AutomaticWakeConfigManager();
+  buildWakeEnv() {
+    const workspaceStatus = this.configManager.getStatus("workspace", this.workspaceRoot);
+    const userStatus = this.configManager.getStatus("user");
+    const env = {};
+    for (const key of import_core.WAKE_ENV_KEYS) {
+      env[key] = workspaceStatus.values[key] ?? userStatus.values[key] ?? (key === "CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS" ? String(import_core.DEFAULT_MAX_AGE_MS) : key === "CLAUDE_CODE_RESUME_PROMPT" ? import_core.DEFAULT_RESUME_PROMPT : "1");
     }
-  } catch (e) {
-    if (e.code === "EOF" || e.code === "EAGAIN") {
-    } else {
-      process.exit(0);
+    return env;
+  }
+  /**
+   * Runs one fallback attempt for `sessionId`, end to end, with every gate
+   * from Parts 10/16/18/34/38 checked before anything is spawned. Safe to
+   * call repeatedly/idempotently — every early-exit path is a `noop` or
+   * `blocked` result, never a partial/inconsistent state write.
+   */
+  async run(sessionId) {
+    const record = this.store.get(sessionId);
+    if (!record) {
+      return { action: "noop", reason: `No wake record for session ${sessionId}` };
     }
-  }
-  if (bytesRead === 0)
-    process.exit(0);
-  const payloadStr = stdinBuffer.subarray(0, bytesRead).toString("utf-8");
-  let eventPayload;
-  try {
-    eventPayload = JSON.parse(payloadStr);
-  } catch (e) {
-    process.exit(0);
-  }
-  if (typeof eventPayload !== "object" || eventPayload === null)
-    process.exit(0);
-  const argvEventType = typeof process.argv[2] === "string" ? process.argv[2] : void 0;
-  const eventType = eventPayload.hook_event_name || argvEventType || eventPayload.type || eventPayload.event;
-  if (typeof eventType !== "string" || eventType.length > 64)
-    process.exit(0);
-  const workspaceInput = eventPayload.cwd || process.cwd();
-  if (typeof workspaceInput !== "string" || workspaceInput.length > 1024)
-    process.exit(0);
-  const handlers = {
-    "SessionStart": true,
-    "PreCompact": true,
-    "StopFailure": true
-  };
-  if (!handlers[eventType])
-    process.exit(0);
-  let workspaceRoot;
-  try {
-    workspaceRoot = fs.realpathSync(path.resolve(workspaceInput));
-  } catch (e) {
-    process.exit(0);
-  }
-  const relayDir = path.join(workspaceRoot, ".relay");
-  const checkpointsDir = path.join(relayDir, "checkpoints");
-  if (!checkpointsDir.startsWith(workspaceRoot)) {
-    process.exit(0);
-  }
-  try {
-    const headRes = (0, import_child_process.spawnSync)("git", ["rev-parse", "HEAD"], { cwd: workspaceRoot, stdio: "pipe", encoding: "utf-8", timeout: 5e3, shell: false });
-    const branchRes = (0, import_child_process.spawnSync)("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: workspaceRoot, stdio: "pipe", encoding: "utf-8", timeout: 5e3, shell: false });
-    const statusRes = (0, import_child_process.spawnSync)("git", ["status", "--porcelain"], { cwd: workspaceRoot, stdio: "pipe", encoding: "utf-8", timeout: 5e3, shell: false });
-    const head = headRes.stdout ? headRes.stdout.trim() : "unknown";
-    const branch = branchRes.stdout ? branchRes.stdout.trim() : "unknown";
-    const statusLines = statusRes.stdout ? statusRes.stdout.split("\n").filter((l) => l.trim().length > 0) : [];
-    const isDirty = statusLines.length > 0;
-    const checkpoint = {
-      schemaVersion: "1.0",
-      id: crypto.randomBytes(8).toString("hex"),
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      type: eventType === "PreCompact" || eventType === "StopFailure" ? "recovery" : "lightweight",
-      reason: eventType,
-      workspace: {
-        path: workspaceRoot,
-        name: path.basename(workspaceRoot)
-      },
-      git: { head, branch, isDirty }
-    };
-    if (!fs.existsSync(checkpointsDir)) {
-      fs.mkdirSync(checkpointsDir, { recursive: true });
+    if (!["ARMED", "WAITING_NATIVE"].includes(record.state)) {
+      return { action: "noop", reason: `Wake record is in state ${record.state}, not eligible for a fallback attempt` };
     }
-    if (eventType === "StopFailure") {
-      try {
-        const candidateFields = ["error", "error_details", "error_type", "errorType", "reason", "matcher", "subtype"];
-        const observedContext = {};
-        for (const field of candidateFields) {
-          const value = eventPayload[field];
-          if (typeof value === "string" && value.length > 0 && value.length <= 128) {
-            observedContext[field] = value;
-          }
-        }
-        const observation = {
-          observedAt: (/* @__PURE__ */ new Date()).toISOString(),
-          eventType,
-          // Real field name is `session_id` (snake_case), confirmed the same way.
-          sessionId: typeof eventPayload.session_id === "string" ? eventPayload.session_id.slice(0, 128) : void 0,
-          context: observedContext
-        };
-        const obsPath = path.join(relayDir, "wake-observations.jsonl");
-        const existingSize = fs.existsSync(obsPath) ? fs.statSync(obsPath).size : 0;
-        if (existingSize < 2 * 1024 * 1024) {
-          fs.appendFileSync(obsPath, JSON.stringify(observation) + "\n", "utf-8");
-        }
-      } catch {
-      }
+    if (new Date(record.expiresAt).getTime() <= Date.now()) {
+      this.store.transition(sessionId, "EXPIRED", { lastResult: { outcome: "blocked", detail: "Wake record expired before a fallback attempt was made", at: (/* @__PURE__ */ new Date()).toISOString() } });
+      return { action: "blocked", state: "EXPIRED", reason: "expired" };
+    }
+    const currentGit = this.deps.getCurrentGit(this.workspaceRoot);
+    const currentGitDir = this.deps.getGitDir(this.workspaceRoot);
+    const safety = (0, import_core.classifyRepoSafety)(record, this.workspaceRoot, currentGitDir, currentGit);
+    if (safety.classification === "UNSAFE") {
+      this.store.transition(sessionId, "CANCELLED", { lastResult: { outcome: "blocked", detail: safety.reason, at: (/* @__PURE__ */ new Date()).toISOString() } });
+      return { action: "blocked", state: "CANCELLED", reason: safety.reason };
+    }
+    if (safety.classification === "DIVERGED") {
+      this.store.transition(sessionId, "BLOCKED_DIVERGED", { lastResult: { outcome: "blocked", detail: safety.reason, at: (/* @__PURE__ */ new Date()).toISOString() } });
+      return { action: "blocked", state: "BLOCKED_DIVERGED", reason: safety.reason };
+    }
+    const acquired = this.lease.acquire(sessionId, "FALLBACK", process.pid);
+    if (!acquired.acquired) {
+      return { action: "noop", reason: `Lease already held: ${acquired.reason}` };
     }
     try {
-      const wakeConfig = new import_core.AutomaticWakeConfigManager();
-      const workspaceWake = wakeConfig.getStatus("workspace", workspaceRoot);
-      const userWake = wakeConfig.getStatus("user");
-      if (workspaceWake.configured || userWake.configured) {
-        const sessionId = (0, import_core.captureSessionId)(eventPayload);
-        if (sessionId) {
-          const wakeStore = new import_core.WakeStateStore(workspaceRoot);
-          const now = (/* @__PURE__ */ new Date()).toISOString();
-          const savedGit = { branch, head, dirtyCount: statusLines.length };
-          const existing = wakeStore.get(sessionId);
-          if (!existing) {
-            const record = {
-              schemaVersion: import_core.WAKE_SCHEMA_VERSION,
-              recordId: crypto.randomBytes(8).toString("hex"),
-              state: "IDLE",
-              sessionId,
-              project: { path: workspaceRoot },
-              createdAt: now,
-              updatedAt: now,
-              reason: eventType,
-              savedGit,
-              attemptCount: 0,
-              expiresAt: new Date(Date.now() + import_core.DEFAULT_MAX_AGE_MS).toISOString(),
-              ownerIdentity: os.userInfo().username
-            };
-            wakeStore.save(record);
-          } else if (existing.state === "IDLE") {
-            wakeStore.save({ ...existing, sessionId, savedGit, updatedAt: now });
-          }
-          if (eventType === "StopFailure") {
-            const errorValue = typeof eventPayload.error === "string" ? eventPayload.error : "";
-            const looksLikeUsageLimit = /rate.?limit|usage.?limit|quota|\b429\b|\b529\b/i.test(errorValue);
-            const current = wakeStore.get(sessionId);
-            if (looksLikeUsageLimit && current && current.state === "IDLE") {
-              const configuredMaxAge = Number(workspaceWake.values.CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS ?? userWake.values.CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS);
-              const maxAgeMs = Number.isFinite(configuredMaxAge) && configuredMaxAge > 0 ? configuredMaxAge : import_core.DEFAULT_MAX_AGE_MS;
-              wakeStore.transition(sessionId, "ARMED", {
-                reason: `StopFailure: ${errorValue.slice(0, 128)}`,
-                expiresAt: new Date(Date.now() + maxAgeMs).toISOString()
-              });
-              try {
-                const wakeRunnerPath = path.join(__dirname, "wake-runner.cjs");
-                const spawnSuppressed = process.env.CLAUDE_RELAY_SUPPRESS_WAKE_SPAWN === "1";
-                if (!spawnSuppressed && fs.existsSync(wakeRunnerPath)) {
-                  const child = (0, import_child_process.spawn)(process.execPath, [wakeRunnerPath, workspaceRoot, sessionId], {
-                    detached: true,
-                    stdio: "ignore",
-                    shell: false,
-                    windowsHide: true
-                  });
-                  child.unref();
-                }
-              } catch {
-              }
-            }
-          }
+      const fingerprint = (0, import_core.resolveClaudeExecutable)(this.deps.claudePathOverride);
+      if (!fingerprint) {
+        this.store.transition(sessionId, "FAILED", { lastResult: { outcome: "failed", detail: "Could not resolve a claude executable", at: (/* @__PURE__ */ new Date()).toISOString() } });
+        return { action: "blocked", state: "FAILED", reason: "claude executable not found" };
+      }
+      if (record.claudeFingerprint) {
+        const verified = (0, import_core.verifyClaudeExecutable)({ ...fingerprint, resolvedPath: record.claudeFingerprint.resolvedPath, sizeBytes: record.claudeFingerprint.sizeBytes, contentHashPrefix: record.claudeFingerprint.contentHashPrefix });
+        if (!verified.ok) {
+          this.store.transition(sessionId, "FAILED", { lastResult: { outcome: "failed", detail: verified.reason, at: (/* @__PURE__ */ new Date()).toISOString() } });
+          return { action: "blocked", state: "FAILED", reason: verified.reason };
         }
       }
-    } catch {
+      this.store.transition(sessionId, "FALLBACK_STARTING", {
+        attemptCount: record.attemptCount + 1,
+        lastAttemptAt: (/* @__PURE__ */ new Date()).toISOString(),
+        claudeFingerprint: { resolvedPath: fingerprint.resolvedPath, sizeBytes: fingerprint.sizeBytes, contentHashPrefix: fingerprint.contentHashPrefix }
+      });
+      this.store.transition(sessionId, "FALLBACK_RUNNING");
+      const result = await (0, import_core.spawnFallbackResumer)({
+        claudePath: fingerprint.resolvedPath,
+        sessionId,
+        workspaceRoot: this.workspaceRoot,
+        extraEnv: this.buildWakeEnv()
+      });
+      const finalState = mapOutcomeToState(result.outcome);
+      const outcome = result.outcome === "success" ? "success" : result.outcome === "failed" || result.outcome === "session_not_found" ? "failed" : "blocked";
+      this.store.transition(sessionId, finalState, { lastResult: { outcome, detail: result.detail, at: (/* @__PURE__ */ new Date()).toISOString() } });
+      return { action: "ran", state: finalState, detail: result.detail };
+    } finally {
+      this.lease.release(sessionId, "FALLBACK");
     }
-    const gitignorePath = path.join(relayDir, ".gitignore");
-    if (!fs.existsSync(gitignorePath)) {
-      try {
-        fs.writeFileSync(gitignorePath, "*\n", "utf-8");
-      } catch {
-      }
-    }
-    const realCheckpointsDir = fs.realpathSync(checkpointsDir);
-    if (!realCheckpointsDir.startsWith(workspaceRoot)) {
-      process.exit(0);
-    }
-    const filePath = path.join(realCheckpointsDir, `${checkpoint.id}.json`);
-    const tempPath = `${filePath}.tmp.${crypto.randomBytes(4).toString("hex")}`;
-    fs.writeFileSync(tempPath, JSON.stringify(checkpoint, null, 2), "utf-8");
-    fs.renameSync(tempPath, filePath);
-  } catch (e) {
-    process.exit(0);
+  }
+};
+function mapOutcomeToState(outcome) {
+  switch (outcome) {
+    case "success":
+      return "COMPLETED";
+    case "blocked_permission":
+      return "BLOCKED_PERMISSION";
+    case "blocked_user_input":
+      return "BLOCKED_USER_INPUT";
+    case "blocked_auth":
+      return "BLOCKED_AUTH";
+    case "session_not_found":
+      return "FAILED_SESSION_NOT_FOUND";
+    default:
+      return "FAILED";
   }
 }
-main().catch(() => process.exit(0));
+function defaultGetGitDir(workspaceRoot) {
+  const candidate = path.join(workspaceRoot, ".git");
+  return fs.existsSync(candidate) ? candidate : void 0;
+}
+
+// src/real-git.ts
+var import_child_process = require("child_process");
+function realGitSnapshot(workspaceRoot) {
+  const run = (args) => (0, import_child_process.spawnSync)("git", args, { cwd: workspaceRoot, stdio: "pipe", encoding: "utf-8", timeout: 5e3, shell: false });
+  const headRes = run(["rev-parse", "HEAD"]);
+  const branchRes = run(["rev-parse", "--abbrev-ref", "HEAD"]);
+  const statusRes = run(["status", "--porcelain"]);
+  const head = headRes.stdout ? headRes.stdout.trim() : "unknown";
+  const branch = branchRes.stdout ? branchRes.stdout.trim() : "unknown";
+  const statusLines = statusRes.stdout ? statusRes.stdout.split("\n").filter((l) => l.trim().length > 0) : [];
+  const staged = [];
+  const unstaged = [];
+  const untracked = [];
+  for (const line of statusLines) {
+    const code = line.slice(0, 2);
+    const file = line.slice(3);
+    if (code === "??")
+      untracked.push(file);
+    else {
+      if (code[0] !== " ")
+        staged.push(file);
+      if (code[1] !== " ")
+        unstaged.push(file);
+    }
+  }
+  return {
+    branch,
+    head,
+    isDetached: branch === "HEAD",
+    isDirty: statusLines.length > 0,
+    staged,
+    unstaged,
+    untracked
+  };
+}
+
+// src/cli.ts
+async function main() {
+  const [workspaceRoot, sessionId] = process.argv.slice(2);
+  if (!workspaceRoot || !sessionId) {
+    process.stdout.write(JSON.stringify({ action: "noop", reason: "usage: wake-runtime-cli <workspaceRoot> <sessionId>" }) + "\n");
+    process.exit(1);
+  }
+  const controller = new WakeController(workspaceRoot, {
+    getCurrentGit: realGitSnapshot,
+    getGitDir: defaultGetGitDir
+  });
+  try {
+    const outcome = await controller.run(sessionId);
+    process.stdout.write(JSON.stringify(outcome) + "\n");
+    process.exit(outcome.action === "blocked" ? 1 : 0);
+  } catch (e) {
+    process.stdout.write(JSON.stringify({ action: "noop", reason: `error: ${e instanceof Error ? e.message : String(e)}` }) + "\n");
+    process.exit(1);
+  }
+}
+main();

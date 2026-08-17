@@ -29,7 +29,12 @@ function runHook(payload: string | Buffer, opts: { cwdOverride?: string; env?: N
   const result = cp.spawnSync(process.execPath, args, {
     input: payload,
     cwd: opts.cwdOverride,
-    env: opts.env ?? process.env,
+    // Default: suppress the real detached wake-runner.cjs spawn (see
+    // packages/hook-runtime/src/index.ts) so every test in this file that
+    // doesn't specifically care about the Level 2 trigger stays deterministic
+    // and doesn't race a real background process. The dedicated trigger test
+    // below explicitly passes its own env without this flag.
+    env: opts.env ?? { ...process.env, CLAUDE_RELAY_SUPPRESS_WAKE_SPAWN: '1' },
     encoding: 'utf-8',
     timeout: 20000,
   });
@@ -225,24 +230,25 @@ describe('hook-runner: wake observability (research instrumentation, not automat
   });
 });
 
+// Shared by both the wake-capture and the Level 2 trigger describe blocks below.
+function wakeRecordFor(workspace: string, sessionId: string): any {
+  const crypto = require('crypto');
+  const hash = crypto.createHash('sha256').update(sessionId).digest('hex').slice(0, 16);
+  const p = path.join(workspace, '.relay', 'wake', `${hash}.json`);
+  return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf-8')) : null;
+}
+
+function enableWakeInWorkspace(workspace: string): void {
+  const claudeDir = path.join(workspace, '.claude');
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(claudeDir, 'settings.local.json'),
+    JSON.stringify({ env: { CLAUDE_CODE_RETRY_WATCHDOG: '1', CLAUDE_CODE_RESUME_INTERRUPTED_TURN: '1' } }),
+    'utf-8'
+  );
+}
+
 describe('hook-runner: Automatic Wake session-identity capture (Part 5, opt-in only)', () => {
-  function wakeRecordFor(workspace: string, sessionId: string): any {
-    const crypto = require('crypto');
-    const hash = crypto.createHash('sha256').update(sessionId).digest('hex').slice(0, 16);
-    const p = path.join(workspace, '.relay', 'wake', `${hash}.json`);
-    return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf-8')) : null;
-  }
-
-  function enableWakeInWorkspace(workspace: string): void {
-    const claudeDir = path.join(workspace, '.claude');
-    fs.mkdirSync(claudeDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(claudeDir, 'settings.local.json'),
-      JSON.stringify({ env: { CLAUDE_CODE_RETRY_WATCHDOG: '1', CLAUDE_CODE_RESUME_INTERRUPTED_TURN: '1' } }),
-      'utf-8'
-    );
-  }
-
   it('creates no .relay/wake/ state at all when Automatic Wake is not configured (default-off)', () => {
     const repo = newRepoDir('wake-capture-disabled');
     initRepo(repo);
@@ -335,6 +341,105 @@ describe('hook-runner: Automatic Wake session-identity capture (Part 5, opt-in o
     expect(result.status).toBe(0);
     expect(checkpointFiles(repo)).toHaveLength(1);
     expect(fs.existsSync(path.join(repo, '.relay', 'wake'))).toBe(false);
+  });
+});
+
+describe('hook-runner: Level 2 automatic trigger (Parts 17-24 -- a real actor, not just wake.json)', () => {
+  // This is the piece explicitly called out as the biggest remaining gap:
+  // arming a wake record is not enough on its own, because nothing would
+  // ever read it. These tests prove a real, detached process gets spawned
+  // and does real work *after* the hook process that spawned it has fully
+  // exited -- not simulated, an actual child process outliving its parent.
+  //
+  // No fake-claude harness here on purpose: this exercises the real,
+  // installed `claude` executable via the real wake-runner.cjs sibling
+  // build artifact, using a syntactically-invalid (non-UUID) session id so
+  // the real CLI's own fast, local, pre-network validation rejects it
+  // immediately -- confirmed empirically (`claude --resume <non-uuid> -p ...`
+  // returns "Provided value ... is not a UUID" with exit 0, no API call, no
+  // quota) rather than assumed. That single confirmed real interaction is
+  // enough to prove the whole chain end-to-end: spawn -> lease -> resolve
+  // executable -> real subprocess -> real (fast, free) response -> state
+  // update -> lease release.
+
+  // Waits until the detached wake-runner has fully finished its attempt --
+  // signaled by the lease being released again (WakeController always
+  // releases it in a `finally`, whether the attempt succeeded, failed, or
+  // was blocked). Polling on the lease rather than "state changed" avoids
+  // stopping early on an intermediate state like FALLBACK_STARTING/
+  // FALLBACK_RUNNING that the process passes through on its way to a
+  // terminal outcome.
+  async function waitForAttemptToFinish(repo: string, sessionId: string, timeoutMs = 15000): Promise<any> {
+    const start = Date.now();
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const record = wakeRecordFor(repo, sessionId);
+      if (record && record.state !== 'ARMED' && record.lease === undefined) return record;
+      if (Date.now() - start > timeoutMs) return record;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+
+  it('spawns a real detached wake-runner.cjs on arming, which keeps running after the hook process exits and updates the wake record for real', async () => {
+    const repo = newRepoDir('trigger-real');
+    initRepo(repo);
+    enableWakeInWorkspace(repo);
+    runRealisticHook('SessionStart', repo, { session_id: 'ses_trigger_test' });
+
+    // eventArg-based env override, WITHOUT the suppression flag, so the real
+    // production spawn path runs.
+    const result = runHook(makePayload('StopFailure', repo, { session_id: 'ses_trigger_test', error: 'rate_limit_exceeded' }), {
+      eventArg: 'StopFailure',
+      env: process.env, // no CLAUDE_RELAY_SUPPRESS_WAKE_SPAWN
+    });
+
+    // spawnSync only waits for hook-runner.cjs itself -- by the time this
+    // returns, the hook process (the "parent" from the detached child's
+    // perspective) has already fully exited. Anything that happens to the
+    // wake record after this point can only be the detached child still
+    // running independently.
+    expect(result.status).toBe(0);
+    const armedImmediatelyAfterParentExit = wakeRecordFor(repo, 'ses_trigger_test');
+    expect(armedImmediatelyAfterParentExit).not.toBeNull();
+
+    const finalRecord = await waitForAttemptToFinish(repo, 'ses_trigger_test');
+    expect(finalRecord).not.toBeNull();
+    // The real CLI's fast local validation error for a non-UUID --resume
+    // value doesn't match the "session not found" pattern classifyOutcome
+    // looks for, so this lands on the generic FAILED state -- still proof
+    // positive that the detached process ran a real subprocess and updated
+    // state, which is what this test exists to prove, not the specific
+    // classification (that's covered exhaustively elsewhere with the
+    // fake-claude harness).
+    expect(['FAILED', 'FAILED_SESSION_NOT_FOUND', 'COMPLETED', 'BLOCKED_PERMISSION', 'BLOCKED_AUTH', 'BLOCKED_USER_INPUT']).toContain(finalRecord.state);
+    expect(finalRecord.attemptCount).toBeGreaterThanOrEqual(1);
+    // The lease must be released again once the attempt concludes -- not left dangling.
+    expect(finalRecord.lease).toBeUndefined();
+  }, 20000);
+
+  it('does not spawn anything when Automatic Wake is not configured, even for a rate-limit-shaped StopFailure', () => {
+    const repo = newRepoDir('trigger-not-configured');
+    initRepo(repo);
+    // Deliberately no enableWakeInWorkspace() call.
+    const result = runHook(makePayload('StopFailure', repo, { session_id: 'ses_no_trigger', error: 'rate_limit' }), {
+      eventArg: 'StopFailure',
+      env: process.env,
+    });
+    expect(result.status).toBe(0);
+    expect(fs.existsSync(path.join(repo, '.relay', 'wake'))).toBe(false);
+  });
+
+  it('respects the suppression flag used by the rest of this test suite (no detached process, arming still happens)', async () => {
+    const repo = newRepoDir('trigger-suppressed');
+    initRepo(repo);
+    enableWakeInWorkspace(repo);
+    runRealisticHook('SessionStart', repo, { session_id: 'ses_suppressed' });
+    runRealisticHook('StopFailure', repo, { session_id: 'ses_suppressed', error: 'rate_limit' }); // uses the default suppressed env
+    // Give a real (unsuppressed) spawn every opportunity to have raced in if
+    // the suppression flag didn't actually work, then confirm it didn't.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const record = wakeRecordFor(repo, 'ses_suppressed');
+    expect(record.state).toBe('ARMED'); // not advanced by any detached process
   });
 });
 

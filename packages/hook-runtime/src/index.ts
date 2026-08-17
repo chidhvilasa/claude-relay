@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { spawnSync } from 'child_process';
+import { spawnSync, spawn } from 'child_process';
 import {
   captureSessionId,
   WakeStateStore,
@@ -217,9 +217,22 @@ async function main() {
           // narrow, observable trigger -- not a guess about task completion,
           // per the task's "Do not guess task completion semantically" rule
           // applied symmetrically to arming as well as disarming.
+          //
+          // Deliberately excludes (Part 25's false-positive list, so these
+          // never arm an unattended fallback attempt):
+          //   authentication_failed -> handled downstream as BLOCKED_AUTH if
+          //     ever reached, but arming for it here would just spawn a
+          //     fallback process that immediately fails the same way -- noise,
+          //     not recovery.
+          //   billing_error / invalid_request / model_not_found /
+          //     max_output_tokens / oauth_org_not_allowed -> none of these
+          //     resolve themselves by waiting; arming would never help.
+          //   overloaded -> explicitly native-retry territory (Level 1's
+          //     CLAUDE_CODE_RETRY_WATCHDOG), not a Level 2 trigger, unless a
+          //     future design explicitly extends this.
           if (eventType === 'StopFailure') {
             const errorValue = typeof (eventPayload as Record<string, unknown>).error === 'string' ? (eventPayload as Record<string, unknown>).error as string : '';
-            const looksLikeUsageLimit = /rate.?limit|usage.?limit|quota|429|529|overloaded/i.test(errorValue);
+            const looksLikeUsageLimit = /rate.?limit|usage.?limit|quota|\b429\b|\b529\b/i.test(errorValue);
             const current = wakeStore.get(sessionId);
             if (looksLikeUsageLimit && current && current.state === 'IDLE') {
               const configuredMaxAge = Number(workspaceWake.values.CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS ?? userWake.values.CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS);
@@ -228,6 +241,40 @@ async function main() {
                 reason: `StopFailure: ${errorValue.slice(0, 128)}`,
                 expiresAt: new Date(Date.now() + maxAgeMs).toISOString(),
               });
+
+              // Part 17-24: "Do NOT merely create wake.json and hope something
+              // eventually reads it. A real actor must exist." -- the actor is
+              // wake-runner.cjs, this hook's own sibling build artifact (a
+              // path relative to this file's own location, resolved via
+              // __dirname -- never CLAUDE_PLUGIN_ROOT, never a repo-relative
+              // or hardcoded absolute dev path, so a clean plugin install
+              // always has it, per Part 48). Spawned detached and unref'd so
+              // it survives this hook process exiting, which happens almost
+              // immediately after this line -- that survival is exactly what
+              // makes this a real trigger instead of inert state.
+              try {
+                const wakeRunnerPath = path.join(__dirname, 'wake-runner.cjs');
+                // Test-only escape hatch (default: spawn enabled, i.e. real
+                // production behavior) -- lets the test suite exercise arming
+                // in isolation without a real detached child process racing
+                // every such test, while a dedicated test explicitly re-enables
+                // this to prove the real trigger end-to-end.
+                const spawnSuppressed = process.env.CLAUDE_RELAY_SUPPRESS_WAKE_SPAWN === '1';
+                if (!spawnSuppressed && fs.existsSync(wakeRunnerPath)) {
+                  const child = spawn(process.execPath, [wakeRunnerPath, workspaceRoot, sessionId], {
+                    detached: true,
+                    stdio: 'ignore',
+                    shell: false,
+                    windowsHide: true,
+                  });
+                  child.unref();
+                }
+              } catch {
+                // Best-effort: the wake record is still armed and remains
+                // manually recoverable even if the detached spawn itself
+                // fails for some reason (e.g. this exact build was installed
+                // without the wake-runner.cjs sibling artifact).
+              }
             }
           }
         }

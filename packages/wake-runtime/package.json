@@ -5,7 +5,7 @@
   "description": "Level 2 Automatic Wake orchestrator: reads a Relay wake record, checks repository safety, acquires a duplicate-continuation lease, and spawns an exact-session Claude fallback resumer. No UI, no HTTP, no credential access, no arbitrary command execution.",
   "main": "dist/index.js",
   "scripts": {
-    "build": "esbuild src/cli.ts --bundle --platform=node --outfile=dist/wake-runtime-cli.js && tsc",
+    "build": "esbuild src/cli.ts --bundle --platform=node --outfile=dist/wake-runtime-cli.js && esbuild src/cli.ts --bundle --platform=node --outfile=../../plugins/claude-relay/runtime/wake-runner.cjs && tsc",
     "lint": "eslint src --ext ts",
     "typecheck": "tsc --project tsconfig.typecheck.json",
     "pretest": "pnpm --filter @claude-relay/core run build",
