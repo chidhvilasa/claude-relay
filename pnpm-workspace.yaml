@@ -2,5 +2,6 @@ packages:
   - 'packages/core'
   - 'packages/vscode'
   - 'packages/hook-runtime'
+  - 'packages/wake-runtime'
 allowBuilds:
   esbuild: true
