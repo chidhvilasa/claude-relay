@@ -33,6 +33,12 @@ interface ClaudePluginData {
   installPath: string;
 }
 
+export interface ClaudePluginDetail {
+  status: ClaudePluginStatus;
+  /** The installed claude-relay plugin's version string, when one was found (regardless of enabled/disabled). Undefined if not installed or undetectable. */
+  version?: string;
+}
+
 // Short-lived cache so rapid, back-to-back refreshes (e.g. VS Code re-rendering
 // the dashboard tree view) don't each spawn a fresh `claude` process. Any
 // action that could change plugin status (manual refresh, migration, install)
@@ -40,23 +46,28 @@ interface ClaudePluginData {
 const CACHE_TTL_MS = 3000;
 
 export class CLIPluginDetector implements ClaudePluginDetector {
-  private cached: { status: ClaudePluginStatus; expiresAt: number } | null = null;
+  private cached: { detail: ClaudePluginDetail; expiresAt: number } | null = null;
 
   invalidate(): void {
     this.cached = null;
   }
 
   async detect(): Promise<ClaudePluginStatus> {
-    if (this.cached && this.cached.expiresAt > Date.now()) {
-      return this.cached.status;
-    }
-
-    const status = await this.detectUncached();
-    this.cached = { status, expiresAt: Date.now() + CACHE_TTL_MS };
-    return status;
+    return (await this.detectDetailed()).status;
   }
 
-  private async detectUncached(): Promise<ClaudePluginStatus> {
+  /** Same detection, but also exposes the installed version string when one is known — used for the update-required check (Part 20/25). */
+  async detectDetailed(): Promise<ClaudePluginDetail> {
+    if (this.cached && this.cached.expiresAt > Date.now()) {
+      return this.cached.detail;
+    }
+
+    const detail = await this.detectUncached();
+    this.cached = { detail, expiresAt: Date.now() + CACHE_TTL_MS };
+    return detail;
+  }
+
+  private async detectUncached(): Promise<ClaudePluginDetail> {
     try {
       // Deliberately exec() with a static string, not execFile() with an
       // args array. Two things were tried and rejected first:
@@ -86,20 +97,21 @@ export class CLIPluginDetector implements ClaudePluginDetector {
         // Unexpected shape (e.g. a future/older CLI version) — we cannot
         // reliably conclude the plugin is absent, so report UNKNOWN rather
         // than NOT_INSTALLED.
-        return 'UNKNOWN';
+        return { status: 'UNKNOWN' };
       }
 
       const relayPlugin = (plugins as ClaudePluginData[]).find(
         p => typeof p?.id === 'string' && (p.id === 'claude-relay@clauderelay-oss' || p.id.startsWith('claude-relay@'))
       );
       if (relayPlugin) {
-        return relayPlugin.enabled ? 'INSTALLED' : 'INSTALLED_DISABLED';
+        const version = typeof relayPlugin.version === 'string' ? relayPlugin.version : undefined;
+        return { status: relayPlugin.enabled ? 'INSTALLED' : 'INSTALLED_DISABLED', version };
       }
-      return 'NOT_INSTALLED';
+      return { status: 'NOT_INSTALLED' };
     } catch (e) {
       // CLI missing, timed out, or returned unparseable output — we cannot
       // reliably detect either way.
-      return 'UNKNOWN';
+      return { status: 'UNKNOWN' };
     }
   }
 }

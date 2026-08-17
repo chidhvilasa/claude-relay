@@ -123,3 +123,33 @@ describe('CLIPluginDetector.detect', () => {
     expect(fs.readFileSync(counterFile, 'utf-8').trim()).toBe('2');
   });
 });
+
+describe('CLIPluginDetector.detectDetailed', () => {
+  it('exposes the installed version alongside status when present and enabled', async () => {
+    shimClaudeJson([{ id: 'claude-relay@clauderelay-oss', version: '0.2.1', scope: 'user', enabled: true, installPath: '/x' }]);
+    const detail = await new CLIPluginDetector().detectDetailed();
+    expect(detail.status).toBe('INSTALLED');
+    expect(detail.version).toBe('0.2.1');
+  });
+
+  it('exposes the installed version even when disabled', async () => {
+    shimClaudeJson([{ id: 'claude-relay@clauderelay-oss', version: '0.2.0', scope: 'user', enabled: false, installPath: '/x' }]);
+    const detail = await new CLIPluginDetector().detectDetailed();
+    expect(detail.status).toBe('INSTALLED_DISABLED');
+    expect(detail.version).toBe('0.2.0');
+  });
+
+  it('has no version when the plugin is not installed', async () => {
+    shimClaudeJson([]);
+    const detail = await new CLIPluginDetector().detectDetailed();
+    expect(detail.status).toBe('NOT_INSTALLED');
+    expect(detail.version).toBeUndefined();
+  });
+
+  it('has no version when the CLI status is UNKNOWN', async () => {
+    process.env.PATH = isWin ? 'C:\\nonexistent-relay-test-path' : '/nonexistent-relay-test-path';
+    const detail = await new CLIPluginDetector().detectDetailed();
+    expect(detail.status).toBe('UNKNOWN');
+    expect(detail.version).toBeUndefined();
+  });
+});
