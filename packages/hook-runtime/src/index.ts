@@ -40,7 +40,25 @@ async function main() {
 
   if (typeof eventPayload !== 'object' || eventPayload === null) process.exit(0);
 
-  const eventType = eventPayload.type || eventPayload.event;
+  // BUG FIX (v0.2.2 hotfix): every real Claude Code hook payload identifies its
+  // event via `hook_event_name` -- confirmed both in current official docs
+  // (code.claude.com/docs/en/hooks.md's own example payload, and its explicit
+  // answer that "type"/"event" never appear in a hook *input* payload, only in
+  // hook *configuration*) and directly in the installed claude.exe binary's own
+  // hook-payload-construction code, e.g. `{...commonFields, hook_event_name:
+  // "StopFailure", error:i, ...}`. This file previously read `eventPayload.type
+  // || eventPayload.event`, which is never present on a real payload -- every
+  // genuine SessionStart/PreCompact/StopFailure invocation from a real Claude
+  // Code process silently hit the `process.exit(0)` early-out below and never
+  // wrote a checkpoint. hooks.json also passes the event name as argv[2] (a
+  // value Relay's own manifest hardcodes, not attacker-influenced), kept here
+  // as a fallback for robustness, with the real payload field preferred as the
+  // authoritative source since it comes directly from Claude Code itself. The
+  // old `type`/`event` fields are kept as a last-resort fallback too --
+  // harmless, since whatever value is resolved still goes through the same
+  // fixed 3-event allowlist below before anything is written.
+  const argvEventType = typeof process.argv[2] === 'string' ? process.argv[2] : undefined;
+  const eventType = eventPayload.hook_event_name || argvEventType || eventPayload.type || eventPayload.event;
   if (typeof eventType !== 'string' || eventType.length > 64) process.exit(0);
 
   const workspaceInput = eventPayload.cwd || process.cwd();

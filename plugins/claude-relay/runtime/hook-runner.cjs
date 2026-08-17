@@ -59,7 +59,8 @@ async function main() {
   }
   if (typeof eventPayload !== "object" || eventPayload === null)
     process.exit(0);
-  const eventType = eventPayload.type || eventPayload.event;
+  const argvEventType = typeof process.argv[2] === "string" ? process.argv[2] : void 0;
+  const eventType = eventPayload.hook_event_name || argvEventType || eventPayload.type || eventPayload.event;
   if (typeof eventType !== "string" || eventType.length > 64)
     process.exit(0);
   const workspaceInput = eventPayload.cwd || process.cwd();
