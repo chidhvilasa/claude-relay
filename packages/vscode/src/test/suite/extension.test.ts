@@ -13,6 +13,8 @@ const DECLARED_COMMANDS = [
   'claudeRelay.reinstallClaudeIntegration',
   'claudeRelay.removeClaudeIntegration',
   'claudeRelay.showLogs',
+  'claudeRelay.updatePlugin',
+  'claudeRelay.pluginAutoUpdateHelp',
 ];
 
 suite('Extension Test Suite', () => {

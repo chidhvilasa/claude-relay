@@ -59,6 +59,27 @@ Just step 1 above.
 A VSIX is also attached to each [GitHub Release](https://github.com/chidhvilasa/claude-relay/releases) as
 a manual/offline fallback — the Marketplace install above is the normal path.
 
+## Updates
+
+The Companion and the Plugin update independently, through their own platform's normal mechanism —
+Relay does not run a custom updater for either.
+
+**Companion updates** are delivered by VS Code through the Visual Studio Marketplace, the same way any
+other extension updates. Control this with VS Code's own **Extensions: Auto Update** setting.
+
+**Plugin updates** go through Claude Code's own plugin marketplace:
+```bash
+claude plugin update claude-relay@clauderelay-oss
+```
+Or run **Claude Relay: Update Plugin** from the Command Palette, which runs the same command and reports
+the result. For automatic Plugin updates, run `/plugin` in Claude Code → Marketplaces → `clauderelay-oss`
+→ **Enable auto-update** (also available as **Claude Relay: Plugin Auto-Update Help**).
+
+If the Companion detects an installed Plugin older than the minimum healthy version, Health Check and
+the status bar flag it — older Plugin versions can silently miss `SessionStart`/`PreCompact`/`StopFailure`
+hook events (see `docs/PLUGIN_HOOK_EVENT_DEFECT.md`), so automatic checkpoints quietly stop happening with
+no visible error until you update.
+
 ## Security
 - **No auth**: Claude Relay handles zero authentication and has no access to Claude credentials.
 - **No network**: Relay runs entirely offline against your local Git repository and `.relay/` folder.
