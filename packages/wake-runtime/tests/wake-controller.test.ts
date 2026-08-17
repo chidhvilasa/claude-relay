@@ -4,7 +4,15 @@ import * as path from 'path';
 import * as os from 'os';
 import { spawnSync } from 'child_process';
 import { WakeStateStore, WakeRecord, WAKE_SCHEMA_VERSION, GitSnapshot, WakeLeaseManager } from '@claude-relay/core';
-import { WakeController } from '../src/wake-controller';
+import { WakeController, WakeRunOutcome } from '../src/wake-controller';
+
+/** Narrows a WakeRunOutcome to its `state`-bearing variants, or fails the test with a clear message if it was a `noop` (which carries no `state`). */
+function expectState(outcome: WakeRunOutcome): string {
+  if (outcome.action === 'noop') {
+    throw new Error(`Expected a state-bearing outcome (blocked/ran), got noop: ${outcome.reason}`);
+  }
+  return outcome.state;
+}
 
 const cleanupDirs: string[] = [];
 afterEach(() => {
@@ -87,7 +95,7 @@ describe.skipIf(fakeClaudePath === null)('WakeController (Part 13 orchestration)
     const controller = new WakeController(ws, { getCurrentGit: () => snapshot(), getGitDir: () => undefined, claudePathOverride: fakeClaudePath! });
     const outcome = await controller.run('ses_test');
     expect(outcome.action).toBe('blocked');
-    expect(outcome.state).toBe('EXPIRED');
+    expect(expectState(outcome)).toBe('EXPIRED');
     expect(store.get('ses_test')!.state).toBe('EXPIRED');
   });
 
@@ -99,7 +107,7 @@ describe.skipIf(fakeClaudePath === null)('WakeController (Part 13 orchestration)
     const controller = new WakeController(ws, { getCurrentGit: () => snapshot(), getGitDir: () => undefined, claudePathOverride: fakeClaudePath! });
     const outcome = await controller.run('ses_test');
     expect(outcome.action).toBe('blocked');
-    expect(outcome.state).toBe('CANCELLED');
+    expect(expectState(outcome)).toBe('CANCELLED');
   });
 
   it('blocks with BLOCKED_DIVERGED when the branch changed — never autonomously continues across a branch switch', async () => {
@@ -109,7 +117,7 @@ describe.skipIf(fakeClaudePath === null)('WakeController (Part 13 orchestration)
     const controller = new WakeController(ws, { getCurrentGit: () => snapshot({ branch: 'feature-b' }), getGitDir: () => undefined, claudePathOverride: fakeClaudePath! });
     const outcome = await controller.run('ses_test');
     expect(outcome.action).toBe('blocked');
-    expect(outcome.state).toBe('BLOCKED_DIVERGED');
+    expect(expectState(outcome)).toBe('BLOCKED_DIVERGED');
   });
 
   it('proceeds through STALE (allowed — the fixed prompt requires reconciliation) to a successful completion', async () => {
@@ -126,7 +134,7 @@ describe.skipIf(fakeClaudePath === null)('WakeController (Part 13 orchestration)
     try {
       const outcome = await controller.run('ses_test');
       expect(outcome.action).toBe('ran');
-      expect(outcome.state).toBe('COMPLETED');
+      expect(expectState(outcome)).toBe('COMPLETED');
     } finally {
       if (prevBehavior === undefined) delete process.env.FAKE_CLAUDE_BEHAVIOR;
       else process.env.FAKE_CLAUDE_BEHAVIOR = prevBehavior;
@@ -144,7 +152,7 @@ describe.skipIf(fakeClaudePath === null)('WakeController (Part 13 orchestration)
     });
     const outcome = await controller.run('ses_test');
     expect(outcome.action).toBe('blocked');
-    expect(outcome.state).toBe('FAILED');
+    expect(expectState(outcome)).toBe('FAILED');
   });
 
   it('refuses to run when another owner already holds the lease — the core Part 10 race', async () => {
@@ -183,7 +191,7 @@ describe.skipIf(fakeClaudePath === null)('WakeController (Part 13 orchestration)
     try {
       const outcome = await controller.run('ses_test');
       expect(outcome.action).toBe('ran');
-      expect(outcome.state).toBe('BLOCKED_PERMISSION');
+      expect(expectState(outcome)).toBe('BLOCKED_PERMISSION');
     } finally {
       if (prevBehavior === undefined) delete process.env.FAKE_CLAUDE_BEHAVIOR;
       else process.env.FAKE_CLAUDE_BEHAVIOR = prevBehavior;
@@ -208,7 +216,7 @@ describe.skipIf(fakeClaudePath === null)('WakeController (Part 13 orchestration)
     try {
       // First attempt: blocked (not success/terminal), records a fingerprint of `privatePath`.
       const first = await controller.run('ses_test');
-      expect(first.state).toBe('BLOCKED_PERMISSION');
+      expect(expectState(first)).toBe('BLOCKED_PERMISSION');
 
       // A real recovery flow moves BLOCKED_PERMISSION -> RECOVERY_AVAILABLE -> ARMED before retrying.
       store.transition('ses_test', 'RECOVERY_AVAILABLE');
@@ -219,7 +227,7 @@ describe.skipIf(fakeClaudePath === null)('WakeController (Part 13 orchestration)
 
       const second = await controller.run('ses_test');
       expect(second.action).toBe('blocked');
-      expect(second.state).toBe('FAILED');
+      expect(expectState(second)).toBe('FAILED');
       if (second.action === 'blocked') {
         expect(second.reason).toMatch(/changed since it was last verified/);
       }

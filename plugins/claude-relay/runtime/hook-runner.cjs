@@ -8404,6 +8404,30 @@ ${stderr}`;
   }
 });
 
+// ../core/dist/wake/session-uri.js
+var require_session_uri = __commonJS({
+  "../core/dist/wake/session-uri.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.buildSessionResumeUri = buildSessionResumeUri;
+    exports2.shouldOfferSessionReopen = shouldOfferSessionReopen;
+    var SESSION_URI_BASE = "vscode://anthropic.claude-code/open";
+    function buildSessionResumeUri(sessionId, prompt) {
+      const params = new URLSearchParams();
+      params.set("session", sessionId);
+      if (prompt)
+        params.set("prompt", prompt);
+      return `${SESSION_URI_BASE}?${params.toString()}`;
+    }
+    function shouldOfferSessionReopen(record, now = /* @__PURE__ */ new Date()) {
+      const reopenableStates = ["ARMED", "WAITING_NATIVE", "RECOVERY_AVAILABLE"];
+      if (!reopenableStates.includes(record.state))
+        return false;
+      return new Date(record.expiresAt).getTime() > now.getTime();
+    }
+  }
+});
+
 // ../core/dist/resume/reconciler.js
 var require_reconciler = __commonJS({
   "../core/dist/resume/reconciler.js"(exports2) {
@@ -8733,6 +8757,7 @@ var require_dist2 = __commonJS({
     __exportStar(require_claude_resolver(), exports2);
     __exportStar(require_continuation_prompt(), exports2);
     __exportStar(require_fallback_resumer(), exports2);
+    __exportStar(require_session_uri(), exports2);
     __exportStar(require_reconciler(), exports2);
     __exportStar(require_providers(), exports2);
     __exportStar(require_wakeup_generator(), exports2);

@@ -15,6 +15,7 @@ export * from './wake/session-capture';
 export * from './wake/claude-resolver';
 export * from './wake/continuation-prompt';
 export * from './wake/fallback-resumer';
+export * from './wake/session-uri';
 export * from './resume/reconciler';
 export * from './usage/providers';
 export * from './handoff/wakeup-generator';

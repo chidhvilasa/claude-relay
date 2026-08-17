@@ -1,5 +1,20 @@
 # Automatic Wake Architecture — Decision Record
 
+> **SUPERSEDED, IN PART — READ THIS FIRST.** The "Does not exist" verdicts below (for
+> `CLAUDE_CODE_RETRY_WATCHDOG`, `CLAUDE_CODE_RESUME_INTERRUPTED_TURN` and its variants, and automatic
+> retry/wait on a usage limit) **were wrong.** A later pass decompiled the actual installed `claude.exe`
+> binary directly instead of relying only on published documentation, and found all of them really
+> present and wired into the retry/resume code paths — just undocumented, not fictional. The full
+> correction, with the evidence, is in
+> [`docs/AUTOMATIC_WAKE_OFFICIAL_CAPABILITIES.md`](./AUTOMATIC_WAKE_OFFICIAL_CAPABILITIES.md); read that
+> document for the current, accurate capability table. This page is kept as-written (not edited to hide
+> the error) because the *reasoning process* it documents — verify a claimed mechanism directly rather
+> than trust it, and say plainly when a claim doesn't check out — turned out to still be exactly right;
+> only the specific verdict for these four variables was wrong, because "checked against public docs"
+> and "checked against what the shipped binary actually does" are different, non-substitutable checks,
+> and this pass only did the first one. `claude respawn` and the general caution about not building on an
+> unverified mechanism remain accurate as originally written below.
+
 **Can Claude Relay automatically continue a Claude Code session after a usage-limit reset? Not yet, and
 not with real confidence — because of one specific, unresolved observability gap identified below, not
 because the idea is unworkable.** This document explains what was verified against official Anthropic
@@ -13,18 +28,20 @@ were confirmed official features to build around: `CLAUDE_CODE_RETRY_WATCHDOG`,
 `CLAUDE_CODE_RESUME_INTERRUPTED_TURN` (and `_MAX_AGE_MS`, `_PROMPT` variants), and `claude respawn <id>`
 described as generally resuming "the interrupted session." Checked directly, not assumed:
 
-| Claimed mechanism | Verified status |
+| Claimed mechanism | Verified status (at the time this page was written) |
 |---|---|
-| `CLAUDE_CODE_RETRY_WATCHDOG` | **Does not exist.** Absent from the official env-vars reference (50+ `CLAUDE_CODE_*`/`CLAUDE_*` variables checked). |
-| `CLAUDE_CODE_RESUME_INTERRUPTED_TURN` (+ `_MAX_AGE_MS`, `_PROMPT`) | **Does not exist.** Same reference, same result. There is no documented concept of an "interrupted turn" the CLI auto-resumes. |
-| Automatic retry/wait when a plan usage limit is hit | **Does not exist.** Official error reference: *"Claude Code blocks further requests until the reset time shown in the message. There is no automatic retry or waiting — the session simply stops accepting new requests."* |
+| `CLAUDE_CODE_RETRY_WATCHDOG` | ~~Does not exist.~~ **Corrected — see the notice above.** Real; absent only from public docs, not from the shipped binary. |
+| `CLAUDE_CODE_RESUME_INTERRUPTED_TURN` (+ `_MAX_AGE_MS`, `_PROMPT`) | ~~Does not exist.~~ **Corrected — see the notice above.** Real; same caveat. |
+| Automatic retry/wait when a plan usage limit is hit | Still not confirmed as of the correction pass either — `CLAUDE_CODE_RETRY_WATCHDOG` is architecturally positioned to cover this (it removes the retry ceiling for 429/529 responses and uses server-provided retry timing), but whether the specific plan-level "usage limit" message flows through that exact path, as opposed to a client-side pre-check that never issues a request at all, remained an open question pending a real (non-provoked) occurrence — see `AUTOMATIC_WAKE_OFFICIAL_CAPABILITIES.md`'s "Not yet verified" section. |
 | `claude respawn <id>\|--all` | **Real** — confirmed directly (`claude respawn --help` on the installed 2.1.217 CLI). Not listed in top-level `claude --help`, but functional. Its documented purpose is narrower than "resume an interrupted session": *"Restart a background session (or all of them) so it picks up the current Claude binary."* It's a background-agent mechanism (`claude agents`), not a generic "continue where you left off" command. |
 
 If a task asks you to build around a specific env var or flag, verify it against the current CLI/docs
 first — this project's own history includes several confidently-stated claims that turned out false when
 actually checked (fabricated release notes, a "Marketplace publication" that had never happened, a
 `shell:true` "fix" that was itself unsafe). This is another instance of the same failure mode, caught
-before anything was built on it.
+before anything was built on it — **and, as the notice above documents, this page's own "checked against
+docs only" method was itself later subject to the same standard and found wanting.** The lesson compounds
+rather than being a one-time catch: verification methods themselves need re-checking, not just claims.
 
 ## What's real, and directly useful
 
